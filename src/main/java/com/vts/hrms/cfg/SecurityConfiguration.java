@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -44,6 +45,7 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests()
                 .requestMatchers("/authenticate").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/admin/get-license").permitAll()
                 //.requestMatchers("/v2/api-docs", "/configuration/ui", "/swagger-resources/**", "/configuration/**", "/swagger-ui.html", "/webjars/**","/swagger-ui/**").permitAll()
                 //.requestMatchers("/registerUser","/sendOtp", "/validateOtp", "/resetPassword", "/event-notice/eventNoticeList", "/event-notice/event-attachment-preview", "/active-member-details", "/uploads/**", "/gallery/all").permitAll()
                 .anyRequest()

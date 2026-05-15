@@ -50,5 +50,7 @@ public interface LoginRepository extends JpaRepository<Login, Long> {
             "JOIN role_security f ON f.role_name=:roleDirector AND f.role_id=e.role_id " +
             "WHERE d.is_active=1 ", nativeQuery = true)
     LoginEmployeeDto findEmployeeByRoleName(@Param("roleDirector") String roleDirector);
+
+    Login findByUsername(String username);
 }
 

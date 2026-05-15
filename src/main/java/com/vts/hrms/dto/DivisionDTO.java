@@ -17,6 +17,8 @@ public class DivisionDTO implements Serializable {
     @NotBlank(message = "Division name is required")
     private String divisionName;
 
+    private String divisionShortName;
+
     @NotNull(message = "Division Head is required")
     private Long divisionHeadId;
 

@@ -33,13 +33,6 @@ public class Distribution implements Serializable {
     @Column(name = "ro_emp_id")
     private Long roEmpId;
 
-    @Column(name = "project_id")
-    private Long projectId;
-
-    @Size(max = 255)
-    @Column(name = "appointment")
-    private String appointment;
-
     @Size(max = 1000)
     @Column(name = "tech_activity", length = 1000)
     private String techActivity;

@@ -1,10 +1,13 @@
 package com.vts.hrms.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vts.hrms.dto.*;
 import com.vts.hrms.entity.*;
 import com.vts.hrms.exception.BadRequestException;
 import com.vts.hrms.exception.NotFoundException;
 import com.vts.hrms.repository.*;
+import com.vts.hrms.util.CommonUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -46,6 +50,10 @@ public class AdminService {
 
     @Value("${labCode}")
     private String labCode;
+
+    @Value("${license}")
+    private String license;
+
     private DateTimeFormatter formatter;
 
     public AdminService(RoleRepository roleRepository, LoginRepository loginRepository, RoleSecurityRepository roleSecurityRepository, MasterClientService masterClient, FormModuleRepository formModuleRepository, FormDetailRepository formDetailRepository, FormRoleAccessRepository formRoleAccessRepository, NotificationRepository notificationRepository, MasterCacheService masterCacheService, AuditStampingRepository auditStampingRepository) {
@@ -398,17 +406,21 @@ public class AdminService {
         log.info("Inside method getNotificationList ");
         Login login = loginRepository.findByUsernameAndIsActive(username, 1);
 
-        List<EmployeeDTO> empData = masterClient.getEmployee(xApiKey, login.getEmpId());
-        EmployeeDTO eDto = !empData.isEmpty() ? empData.get(0) : new EmployeeDTO();
+//        List<EmployeeDTO> empData = masterClient.getEmployee(xApiKey, login.getEmpId());
+//        EmployeeDTO eDto = !empData.isEmpty() ? empData.get(0) : new EmployeeDTO();
+
+        Map<Long, EmployeeDTO> employeeMap = masterCacheService.getLongEmployeeDTOMap();
 
         List<Notification> notificationList = notificationRepository.getNotificationList(login.getEmpId());
         return notificationList.stream()
                 .map(data -> {
 
+                    EmployeeDTO employeeDTO = employeeMap.get(data.getNotificationBy());
+
                     return NotificationDTO.builder()
                             .notificationId(data.getNotificationId())
-                            .empName(eDto.getEmpName())
-                            .empDesig(eDto.getEmpDesigCode())
+                            .empName(CommonUtil.buildEmployeeName(employeeDTO,true))
+//                            .empDesig(eDto.getEmpDesigCode())
                             .notificationMessage(data.getNotificationMessage())
                             .notificationDate(data.getNotificationDate())
                             .notificationUrl(data.getNotificationUrl())
@@ -457,8 +469,7 @@ public class AdminService {
         log.info("LoginService Inside method auditStampingList | user: {}, fromDate : {}, toDate : {}", username, fromDate, toDate);
 
         try {
-            List<AuditStampingDTO> auditList = auditStampingRepository.auditList(username, fromDate, toDate.plusDays(1));
-                return auditList;
+            return auditStampingRepository.auditList(username, fromDate, toDate.plusDays(1));
 
         } catch (Exception e) {
             log.error("Error in LoginService Inside method auditStampingList: {}", e.getMessage(), e);
@@ -466,6 +477,183 @@ public class AdminService {
         }
     }
 
+    public DashboardLoginStatsDTO getLoginStats(String startDate, String endDate) {
+        LocalDateTime now = LocalDateTime.now();
+
+        // 1. Calculate standard timeframes
+        LocalDateTime start24h = now.minusHours(24);
+        LocalDateTime startWeek = now.minusWeeks(1L);
+        LocalDateTime startMonth = now.minusMonths(1L);
+
+        // 2. Parse Custom Dates
+        LocalDateTime customStart = LocalDate.parse(startDate).atStartOfDay();
+        LocalDateTime customEnd = LocalDate.parse(endDate).atTime(23, 59, 59);
+
+        // 3. Fetch all counts (These are fast indexed counts)
+        Long c24h = auditStampingRepository.countLogins(start24h, now);
+        Long cWeek = auditStampingRepository.countLogins(startWeek, now);
+        Long cMonth = auditStampingRepository.countLogins(startMonth, now);
+        Long active = auditStampingRepository.countActiveNow();
+
+        // 4. Fetch Custom Range Data (Count + Chart)
+        Long customTotal = auditStampingRepository.countLogins(customStart, customEnd);
+        List<LoginChartPointDTO> customChart = mapDaily(
+                auditStampingRepository.groupDaily(customStart, customEnd)
+        );
+
+        // 5. Return Unified DTO
+        // Structure: appCode, count24h, countWeek, countMonth, activeNow, customTotal, customChart
+        return new DashboardLoginStatsDTO(
+                "HRMS",
+                c24h,
+                cWeek,
+                cMonth,
+                active,
+                customTotal,
+                customChart
+        );
+    }
+
+    private List<LoginChartPointDTO> mapDaily(List<Object[]> rows) {
+        return rows.stream()
+                .map(r -> new LoginChartPointDTO(r[0].toString(), ((Number) r[1]).longValue()))
+                .toList();
+    }
+
+    public long loginStampingInsert(AuditStamping stamping) throws Exception {
+        long result = 0;
+        if (stamping == null) {
+            log.warn("loginStampingInsert : One required parameters is null - stamping :{}",stamping);
+            return result;
+        }
+        log.info( "AdminService Inside method loginStampingInsert");
+        try{
+            AuditStamping audit =  auditStampingRepository.save(stamping);
+            if(audit.getAuditStampingId()!=null){
+                return 1;
+            }
+        }catch (Exception e) {
+            log.error("error in AdminService Inside method loginStampingInsert:{} ", e.getMessage(),e);
+        }
+        return result;
+    }
+
+    public Long lastLoginStampingId(Long loginId) throws Exception {
+        if (loginId == null) {
+            log.warn("lastLoginStampingId : One required parameter is null - loginId :{}", loginId);
+            return 0L;
+        }
+
+        log.info("AdminService Inside method LastLoginStampingId : loginId :{}", loginId);
+
+        try {
+            Optional<Long> result = auditStampingRepository.findLastLoginStampingId(loginId);
+
+            // Convert the Long result to String safely
+            return result.orElse(0L);
+
+        } catch (Exception e) {
+            log.error("Error in AdminService Inside method LastLoginStampingId :{}", e.getMessage(), e);
+            throw new Exception("Error while fetching last login stamping ID", e);
+        }
+    }
+
+    public long loginStampingUpdate(AuditStamping stamping) throws Exception {
+        long result = 0;
+        if (stamping == null) {
+            log.warn("loginStampingUpdate : One required parameters is null - stamping ");
+            return result;
+        }
+        log.info( "AdminService Inside method LoginStampingUpdate {}", stamping );
+        try{
+            Optional<AuditStamping> prevStampingDetails = auditStampingRepository.findById(stamping.getAuditStampingId());
+            if(prevStampingDetails.isPresent()) {
+                AuditStamping auditStamping = prevStampingDetails.get();
+                auditStamping.setAuditStampingId(stamping.getAuditStampingId());
+                auditStamping.setLogoutType(stamping.getLogoutType());
+                auditStamping.setLogoutDateTime(stamping.getLogoutDateTime());
+                auditStampingRepository.save(auditStamping);
+                return 1;
+            }
+        }catch (Exception e) {
+            log.error(" error in AdminService Inside method LoginStampingUpdate {}", e.getMessage(),e);
+        }
+        return result;
+    }
+
+    public Integer changePassword(ChangePasswordDTO changePasswordDTO) {
+        String username = changePasswordDTO.getUsername();
+        String oldPassword = changePasswordDTO.getOldPassword();
+        String newPassword = changePasswordDTO.getNewPassword();
+
+        if(username==null || oldPassword==null || newPassword == null) {
+            log.warn("changePassword: One of Required parameter is null or empty, username = {}",username);
+            return 0;
+        }
+        log.info("Inside Update-Password: username = {}", username);
+        try{
+            Login login = loginRepository.findByUsername(username);
+            String actualOldPassword = login.getPassword();
+
+            // 1. Old and new password should not be same
+            if (oldPassword.equals(newPassword)) {
+                return 422;
+            }
+
+            // 2. Old password does not match DB password
+            if (!encoder.matches(oldPassword, actualOldPassword)) {
+                return 401;
+            }
+
+            if(encoder.matches(oldPassword, actualOldPassword)){
+                String encodedNewPassword = encoder.encode(newPassword);
+                login.setPassword(encodedNewPassword);
+                login.setModifiedBy(username);
+                login.setModifiedDate(LocalDateTime.now());
+                loginRepository.save(login);
+                return 200;
+            }
+            return 0;
+        }catch(Exception e) {
+            log.error("Exception in Update-Password for username {}: {}", username, e.getMessage(), e);
+            return 400;
+        }
+    }
+
+
+    public Boolean getLicense() {
+        try {
+            if (license == null || license.isBlank()) {
+                log.warn("License token is empty");
+                return false;
+            }
+
+            String[] parts = license.split("\\.");
+
+            if (parts.length < 2) {
+                log.warn("Invalid JWT format");
+                return false;
+            }
+
+            String payloadJson =
+                    new String(Base64.getUrlDecoder().decode(parts[1]));
+
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode payload = mapper.readTree(payloadJson);
+
+            if (!payload.has("exp")) {
+                log.warn("JWT does not contain exp");
+                return false;
+            }
+
+            long exp = payload.get("exp").asLong();
+            Instant expiryInstant = Instant.ofEpochSecond(exp);
+            return expiryInstant.isAfter(Instant.now());
+        } catch (Exception e) {
+            log.error("License validation failed", e);
+            return false;
+        }
+    }
 }
 
 

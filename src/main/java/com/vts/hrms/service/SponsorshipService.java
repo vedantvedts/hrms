@@ -5,6 +5,7 @@ import com.vts.hrms.entity.*;
 import com.vts.hrms.exception.NotFoundException;
 import com.vts.hrms.mapper.SponsorshipMapper;
 import com.vts.hrms.repository.SponsorshipRepository;
+import com.vts.hrms.util.CommonUtil;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +51,7 @@ public class SponsorshipService {
             EmployeeDTO employeeDTO = employeeDTOMap.get(data.getEmpId());
              if(employeeDTO!=null) {
                  data.setEmpNo(employeeDTO.getEmpNo());
-                 data.setEmployeeName(buildEmployeeName(employeeDTO, false));
+                 data.setEmployeeName(CommonUtil.buildEmployeeName(employeeDTO, false));
                  data.setEmpDesigCode(employeeDTO.getEmpDesigName());
                  data.setDesigCadre(employeeDTO.getDesigCadre());
                  data.setEmpDivCode(employeeDTO.getEmpDivCode());
@@ -61,7 +62,7 @@ public class SponsorshipService {
     }
 
 
-    @CacheEvict(value = "sponsorshipCache", allEntries = true)
+    @CacheEvict(value = {"sponsorshipCache", "mtechReportCache", "phdReportCache"}, allEntries = true)
     @Transactional
     public SponsorshipDTO addSponsorshipData(@Valid SponsorshipDTO dto, String username) {
         log.info("Request to add sponsorship by {}", username);
@@ -76,7 +77,7 @@ public class SponsorshipService {
     }
 
 
-    @CacheEvict(value = "sponsorshipCache", allEntries = true)
+    @CacheEvict(value = {"sponsorshipCache", "mtechReportCache", "phdReportCache"}, allEntries = true)
     @Transactional
     public Optional<SponsorshipDTO> editSponsorshipData(SponsorshipDTO dto, String username) {
         log.info("Request to edit sponsorship for id {} by {}", dto.getSponsorshipId(), username);
@@ -107,37 +108,5 @@ public class SponsorshipService {
         return sponsorshipMapper.toDto(sponsorship);
     }
 
-    private String buildEmployeeName(EmployeeDTO emp, boolean includeDesignation) {
-
-        if (emp == null) return "";
-
-        String title = Optional.ofNullable(emp.getTitle())
-                .filter(t -> !t.isBlank())
-                .orElse(null);
-
-        String salutation = Optional.ofNullable(emp.getSalutation())
-                .filter(s -> !s.isBlank())
-                .orElse(null);
-
-        String name = Optional.ofNullable(emp.getEmpName()).orElse("");
-        String designation = Optional.ofNullable(emp.getEmpDesigName()).orElse("");
-
-        // Priority: Title → Salutation → Nothing
-        String prefix = title != null ? title : (salutation != null ? salutation : "");
-
-        StringBuilder fullName = new StringBuilder();
-
-        if (!prefix.isBlank()) {
-            fullName.append(prefix).append(" ");
-        }
-
-        fullName.append(name);
-
-        if (includeDesignation && !designation.isBlank()) {
-            fullName.append(", ").append(designation);
-        }
-
-        return fullName.toString().trim();
-    }
 
 }

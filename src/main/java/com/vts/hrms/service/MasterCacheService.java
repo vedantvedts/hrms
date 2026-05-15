@@ -2,11 +2,14 @@ package com.vts.hrms.service;
 
 import com.vts.hrms.dto.DivisionDTO;
 import com.vts.hrms.dto.EmployeeDTO;
+import com.vts.hrms.dto.ProjectEmployeeDto;
 import com.vts.hrms.dto.ProjectMasterDTO;
 import com.vts.hrms.entity.Course;
+import com.vts.hrms.entity.CourseType;
 import com.vts.hrms.entity.Organizer;
 import com.vts.hrms.entity.Status;
 import com.vts.hrms.repository.CourseRepository;
+import com.vts.hrms.repository.CourseTypeRepository;
 import com.vts.hrms.repository.OrganizerRepository;
 import com.vts.hrms.repository.StatusRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,12 +34,14 @@ public class MasterCacheService {
     private final OrganizerRepository organizerRepository;
     private final CourseRepository courseRepository;
     private final StatusRepository statusRepository;
+    private final CourseTypeRepository courseTypeRepository;
 
-    public MasterCacheService(MasterClientService masterClient, OrganizerRepository organizerRepository, CourseRepository courseRepository, StatusRepository statusRepository) {
+    public MasterCacheService(MasterClientService masterClient, OrganizerRepository organizerRepository, CourseRepository courseRepository, StatusRepository statusRepository, CourseTypeRepository courseTypeRepository) {
         this.masterClient = masterClient;
         this.organizerRepository = organizerRepository;
         this.courseRepository = courseRepository;
         this.statusRepository = statusRepository;
+        this.courseTypeRepository = courseTypeRepository;
     }
 
     @Cacheable(value = "employeeMapCache", key = "'employeeMap'")
@@ -80,6 +85,23 @@ public class MasterCacheService {
     public Map<String, Status> getStatusMap() {
         return statusRepository.findAll().stream()
                 .collect(Collectors.toMap(Status::getStatusCode, Function.identity()));
+    }
+
+    @Cacheable(value = "courseTypeCache", key = "'courseType'")
+    public Map<Long, CourseType> getCourseTypeMap() {
+        return courseTypeRepository.findAll().stream()
+                .collect(Collectors.toMap(CourseType::getCourseTypeId, Function.identity()));
+    }
+
+    @Cacheable(value = "projectEmployeeCache", key = "'projectEmployee'")
+    public Map<Long, List<ProjectEmployeeDto>> getProjectEmployeeMap() {
+
+        List<ProjectEmployeeDto> list =
+                masterClient.getProjectListByEmpId(xApiKey, null);
+
+        return list.stream()
+                .filter(p -> p.getEmpId() != null)
+                .collect(Collectors.groupingBy(ProjectEmployeeDto::getEmpId));
     }
 
 }

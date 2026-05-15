@@ -44,6 +44,8 @@ public class RequisitionDTO implements Serializable {
     @NotBlank(message = "Course submission is required")
     private String isSubmitted;
 
+    private String isPaperPresent;
+
     private String courseLevel;
     private String courseType;
     private BigDecimal registrationFee;
@@ -61,6 +63,9 @@ public class RequisitionDTO implements Serializable {
     private String fileCheque;
     private String filePan;
     private String fileBrochure;
+    private String fileCommitteeApproval;
+    private String fileAcceptanceLetter;
+    private String filePaper;
 
     private String courseName;
     private Long organizerId;
@@ -86,6 +91,9 @@ public class RequisitionDTO implements Serializable {
 
     private String remarks;
 
+    private Long journalId;
+    private String titleOfPaper;
+
     private String forwardByName;
     private LocalDateTime forwardDate;
     private LocalDateTime verifiedDate;
@@ -95,4 +103,7 @@ public class RequisitionDTO implements Serializable {
     private MultipartFile multipartFileCheque;
     private MultipartFile multipartFilePan;
     private MultipartFile multipartFileBrochure;
+    private MultipartFile multipartCommitteeApproval;
+    private MultipartFile multipartAcceptanceLetter;
+    private MultipartFile multipartPaper;
 }

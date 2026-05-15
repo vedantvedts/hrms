@@ -19,6 +19,7 @@ public class CourseDTO implements Serializable {
 
     private String courseLevel;
     private Long courseTypeId;
+    private String courseType;
 
     @NotNull(message = "Eligibility is required")
     private Long eligibilityId;

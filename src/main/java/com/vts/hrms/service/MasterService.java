@@ -8,6 +8,7 @@ import com.vts.hrms.mapper.SignRoleAuthorityMapper;
 import com.vts.hrms.repository.LoginRepository;
 import com.vts.hrms.repository.SignAuthRoleRepository;
 import com.vts.hrms.repository.SignRoleAuthorityRepository;
+import com.vts.hrms.util.CommonUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,39 +53,6 @@ public class MasterService {
         this.signAuthRoleMapper = signAuthRoleMapper;
         this.signRoleAuthorityMapper = signRoleAuthorityMapper;
         this.masterCacheService = masterCacheService;
-    }
-
-    private String buildEmployeeName(EmployeeDTO emp, boolean includeDesignation) {
-
-        if (emp == null) return "";
-
-        String title = Optional.ofNullable(emp.getTitle())
-                .filter(t -> !t.isBlank())
-                .orElse(null);
-
-        String salutation = Optional.ofNullable(emp.getSalutation())
-                .filter(s -> !s.isBlank())
-                .orElse(null);
-
-        String name = Optional.ofNullable(emp.getEmpName()).orElse("");
-        String designation = Optional.ofNullable(emp.getEmpDesigName()).orElse("");
-
-        // Priority: Title → Salutation → Nothing
-        String prefix = salutation != null ? salutation : (title != null ? title : "");
-
-        StringBuilder fullName = new StringBuilder();
-
-        if (!prefix.isBlank()) {
-            fullName.append(prefix).append(" ");
-        }
-
-        fullName.append(name);
-
-        if (includeDesignation && !designation.isBlank()) {
-            fullName.append(", ").append(designation);
-        }
-
-        return fullName.toString().trim();
     }
 
     @Cacheable(value = "designationList")
@@ -133,10 +101,7 @@ public class MasterService {
         log.info("Fetching employee master");
         return masterClient.getEmployeeMasterList(xApiKey).stream()
                 .filter(e -> labCode != null && labCode.equalsIgnoreCase(e.getLabCode()))
-                .map(emp->{
-                    emp.setEmpName(buildEmployeeName(emp,false));
-                    return emp;
-                })
+                .peek(emp-> emp.setEmpName(CommonUtil.buildEmployeeName(emp,false)))
                 .toList();
 
     }
@@ -181,7 +146,7 @@ public class MasterService {
 
             EmployeeDTO employee = employeeMap.get(dto.getEmpId());
             if (employee != null) {
-                dto.setEmployeeName(buildEmployeeName(employee,true));
+                dto.setEmployeeName(CommonUtil.buildEmployeeName(employee,true));
                 dto.setEmployeeDesignation(employee.getEmpDesigName());
             }
         }

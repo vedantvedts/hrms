@@ -49,5 +49,6 @@ public class FeedbackDTO {
     private Long acceptedBy;
     private String acceptedByName;
     private LocalDateTime acceptedDate;
+    private String requestThrough;
 
 }

@@ -25,6 +25,6 @@ public interface SignRoleAuthorityRepository extends JpaRepository<SignRoleAutho
             "FROM SignRoleAuthority r " +
             "JOIN SignAuthRole s ON r.signAuthRoleId = s.signAuthRoleId " +
             "WHERE (r.validUpto IS NULL OR CURRENT_DATE <= r.validUpto) " +
-            "AND s.isActive = 1 AND s.signAuthRole = :authRole")
-    SignRoleAuthorityDTO findBySignAuthRole(@Param("authRole") String authRole);
+            "AND s.isActive = 1 AND r.isActive = 1 AND s.signAuthRole = :authRole")
+    List<SignRoleAuthorityDTO> findBySignAuthRole(@Param("authRole") String authRole);
 }

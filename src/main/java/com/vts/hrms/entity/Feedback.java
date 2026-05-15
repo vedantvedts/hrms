@@ -72,6 +72,9 @@ public class Feedback {
     @Column(name = "is_accepted")
     private String isAccepted;
 
+    @Column(name = "request_through")
+    private String requestThrough;
+
     @Column(name = "accepted_by")
     private Long acceptedBy;
 

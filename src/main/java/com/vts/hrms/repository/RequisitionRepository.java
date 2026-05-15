@@ -1,7 +1,6 @@
 package com.vts.hrms.repository;
 
 import com.vts.hrms.dto.RequisitionDashboardDTO;
-import com.vts.hrms.entity.Feedback;
 import com.vts.hrms.entity.Requisition;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -81,11 +80,11 @@ public interface RequisitionRepository extends JpaRepository<Requisition, Long> 
             SELECT new com.vts.hrms.dto.RequisitionDashboardDTO(
             c.organizerId,
             o.organizer,
-            COUNT(r.requisitionId),
-            SUM(CASE WHEN r.status IN ('AA','REV','RR','RV') THEN 1 ELSE 0 END),
-            SUM(CASE WHEN r.status='AF' THEN 1 ELSE 0 END),
-            SUM(CASE WHEN r.status='AR' THEN 1 ELSE 0 END),
-            SUM(CASE WHEN r.status='AV' THEN 1 ELSE 0 END)
+            COUNT(r.requisitionId) AS total,
+            SUM(CASE WHEN r.status IN ('AA','REV','RR','RV','RS') THEN 1 ELSE 0 END) AS pending,
+            SUM(CASE WHEN r.status='AF' THEN 1 ELSE 0 END) AS forwarded,
+            SUM(CASE WHEN r.status='AR' THEN 1 ELSE 0 END) AS recommended,
+            SUM(CASE WHEN r.status='AV' THEN 1 ELSE 0 END) AS approved
             )
             FROM Requisition r
             JOIN Course c ON r.courseId = c.courseId
@@ -97,4 +96,28 @@ public interface RequisitionRepository extends JpaRepository<Requisition, Long> 
             GROUP BY c.organizerId,o.organizer
             """)
     List<RequisitionDashboardDTO> getRequisitionFilterUserDashboard(Long empId, LocalDate startDate, LocalDate endDate);
+
+    @Query("""
+                SELECT r
+                FROM Requisition r
+                WHERE r.isActive = 1
+                  AND r.fromDate >= :fromDate
+                  AND r.toDate <= :toDate
+                ORDER BY r.requisitionId DESC
+            """)
+    List<Requisition> getRequisitionDataByDateRange(@Param("fromDate") LocalDate fromDate,
+                                                    @Param("toDate") LocalDate toDate);
+
+    @Query("""
+                SELECT r
+                FROM Requisition r
+                WHERE r.isActive = 1
+                  AND r.journalId IS NOT NULL
+                  AND r.journalId > 0
+                  AND r.fromDate >= :fromDate
+                  AND r.toDate <= :toDate
+                ORDER BY r.requisitionId DESC
+            """)
+    List<Requisition> findActiveRequisitionsWithJournalId(@Param("fromDate") LocalDate fromDate,
+                                                          @Param("toDate") LocalDate toDate);
 }

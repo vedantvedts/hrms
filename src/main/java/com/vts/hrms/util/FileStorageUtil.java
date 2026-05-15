@@ -78,7 +78,7 @@ public class FileStorageUtil {
     }
 
     /** Delete a file safely */
-    private static void deleteFileIfExists(Path folder, String fileName) {
+    public static void deleteFileIfExists(Path folder, String fileName) {
         if (folder != null && fileName != null) {
             Path filePath = folder.resolve(fileName);
             try {
@@ -104,5 +104,6 @@ public class FileStorageUtil {
             }
         }
     }
+
 }
 

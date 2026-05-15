@@ -1,21 +1,27 @@
 package com.vts.hrms.controller;
 
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.vts.hrms.auth.AuthenticationController;
 import com.vts.hrms.dto.*;
+import com.vts.hrms.entity.AuditStamping;
 import com.vts.hrms.entity.Login;
 import com.vts.hrms.entity.RoleSecurity;
 import com.vts.hrms.repository.LoginRepository;
 import com.vts.hrms.service.AdminService;
 import com.vts.hrms.util.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.InetAddress;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -243,6 +249,102 @@ public class AdminController {
         } catch (Exception e) {
             LOG.error("Error in auditStampingList: {}", e.getMessage(), e);
             return new ResponseEntity<>(null, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @PostMapping(value="custom-audit-stamping-login" ,produces="application/json")
+    public String logIn(@RequestBody String username, Authentication authentication, HttpServletRequest request)throws Exception {
+        LOG.info(" Inside custom-audit-stamping-login: user:{}, ",username);
+        long result=0;
+        username = username.replace("\"", "");
+        String IpAddress;
+        try{
+            IpAddress = request.getRemoteAddr();
+            if("0:0:0:0:0:0:0:1".equalsIgnoreCase(IpAddress))
+            {
+                InetAddress ip = InetAddress.getLocalHost();
+                IpAddress= ip.getHostAddress();
+            }
+        }
+        catch(Exception e)
+        {
+            IpAddress="Not Available";
+        }
+        try{
+            Login login = loginRepository.findByUsernameAndIsActive(username,1);
+            AuditStamping stamping=new AuditStamping();
+            stamping.setLoginId(login.getLoginId());
+            stamping.setLoginDate(LocalDate.now());
+            stamping.setLoginDatetime(LocalDateTime.now());
+            stamping.setUsername(login.getUsername());
+            stamping.setIpAddress(IpAddress);
+            result = adminService.loginStampingInsert(stamping);
+        }catch (Exception e) {
+            LOG.error("Error in custom-audit-stamping-login: {}", e.getMessage(), e);
+        }
+        return String.valueOf(result);
+
+    }
+
+
+    @PostMapping(value = "custom-audit-stamping-logout", produces = "application/json")
+    public String logout(@RequestBody JsonNode requestBody, Authentication authentication) throws Exception {
+        LOG.info( " Inside custom-auditStamping-logout {}", authentication.getName());
+        long result = 0;
+
+        String username = requestBody.get("username").asText();
+        String logoutType = requestBody.get("logoutType").asText();
+        Login login = loginRepository.findByUsernameAndIsActive(username,1);
+        Long loginId = login.getLoginId();
+
+        try {
+            if (loginId!=null) {
+                AuditStamping stamping = new AuditStamping();
+                stamping.setAuditStampingId(adminService.lastLoginStampingId(loginId));
+                stamping.setLogoutType(logoutType);
+                stamping.setLogoutDateTime(LocalDateTime.now());
+                result = adminService.loginStampingUpdate(stamping);
+            }
+        } catch (Exception e) {
+            LOG.error(" error in custom-audit-stamping-logout {}", e.getMessage(),e);
+        }
+        return String.valueOf(result);
+    }
+
+    @GetMapping("/get-login-stats")
+    public DashboardLoginStatsDTO getLoginStats(
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate
+    ) {
+        return adminService.getLoginStats(startDate, endDate);
+    }
+
+    @PutMapping(value = "/change-password", produces="application/json")
+    public ResponseEntity<String> updatePassword(@RequestHeader String username,@RequestBody ChangePasswordDTO dto){
+        LOG.info("REST request to change password for user :{}",username);
+        try {
+            Integer count = adminService.changePassword(dto);
+            if(count > 0){
+                return ResponseEntity.ok(count+"");
+            }
+            return ResponseEntity.badRequest().body("0");
+
+        } catch (Exception e) {
+            LOG.error("Error while changing the password for user: {} {}", username, e.getMessage(), e);
+            return new ResponseEntity<>("0", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @GetMapping(value = "/get-license", produces = "application/json")
+    public ResponseEntity<Boolean> getLicense() {
+        LOG.info("Inside getLicense()");
+        try {
+            boolean isValid = adminService.getLicense();
+            return ResponseEntity.ok(isValid);
+        } catch (Exception e) {
+            LOG.error("Error in getLicense: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(false);
         }
     }
 

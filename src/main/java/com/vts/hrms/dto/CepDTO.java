@@ -6,6 +6,7 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class CepDTO implements Serializable {
@@ -39,4 +40,13 @@ public class CepDTO implements Serializable {
 
     @Size(max = 500, message = "Comments must not exceed 500 characters")
     private String comments;
+
+    private Long courseCoordinatorId;
+    private String courseCoordinatorName;
+
+    private Long deputyCourseCoordinatorId;
+    private String deputyCourseCoordinatorName;
+
+    private List<CepAttachmentsDTO> cepAttachments;
+
 }

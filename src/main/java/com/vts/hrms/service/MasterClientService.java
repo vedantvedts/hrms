@@ -3,6 +3,7 @@ package com.vts.hrms.service;
 import com.vts.hrms.auth.AuthenticationRequest;
 import com.vts.hrms.dto.*;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,11 +35,17 @@ public interface MasterClientService {
     List<ProjectMasterDTO> getProjectMasterList(@RequestHeader("X-API-KEY") String apiKey);
 
     @GetMapping("/getProjectListByEmpId")
-    List<ProjectEmployeeDto> getProjectListByEmpId(@RequestHeader("X-API-KEY") String apiKey, @RequestParam("empId") long empId);
+    List<ProjectEmployeeDto> getProjectListByEmpId(@RequestHeader("X-API-KEY") String apiKey, @RequestParam("empId") Long empId);
 
     @GetMapping(value = "/roleMaster")
     List<RoleMaster> getRoleMasterList(@RequestHeader(value = "Authorization") String token);
 
     @PostMapping(value = "/addProjectRoleId")
     ResponseEntity<String> addProjectRoleIds(@RequestBody ProjectAssignEmpDto dto, @RequestHeader("Authorization") String token, @RequestHeader("username") String username);
+
+    @GetMapping(value = "/user-login-app-access" )
+    ResponseEntity<Boolean> checkUserLoginAccess(@RequestHeader("Authorization") String token, @RequestHeader("username") String username, @RequestParam ProjectCode projectCode);
+
+    @GetMapping( value = "/get-app-urls", consumes = MediaType.APPLICATION_JSON_VALUE )
+    List<ReactAppUrlDTO> getReactAppUrls(@RequestHeader("X-API-KEY") String apiKey);
 }

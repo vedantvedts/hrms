@@ -1,8 +1,10 @@
 package com.vts.hrms.controller;
 
 import com.vts.hrms.dto.*;
+import com.vts.hrms.service.MasterClientService;
 import com.vts.hrms.service.MasterService;
 import com.vts.hrms.util.ApiResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,9 +17,14 @@ import java.util.stream.Collectors;
 public class MasterController {
 
     private final MasterService masterService;
+    private final MasterClientService masterClient;
 
-    public MasterController(MasterService masterService) {
+    @Value("${x_api_key}")
+    private String xApiKey;
+
+    public MasterController(MasterService masterService,MasterClientService masterClient) {
         this.masterService = masterService;
+        this.masterClient=masterClient;
     }
 
     @GetMapping(value = "/designation")
@@ -169,6 +176,34 @@ public class MasterController {
         } else {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse(false, "Failed to assign project roles", null));
+        }
+    }
+
+    @GetMapping("/user-login-app-access")
+    public ResponseEntity<Boolean> checkUserLoginAccess(@RequestHeader(value = "username", required = false) String username,@RequestHeader(value = "Authorization", required = false) String token, @RequestParam ProjectCode projectCode) {
+
+        try {
+            return masterClient.checkUserLoginAccess(token,username,projectCode);
+        } catch (Exception e) {
+            //
+            e.printStackTrace();
+            return ResponseEntity.ok(false);
+        }
+    }
+
+    @GetMapping("/get-react-app-urls")
+    public ResponseEntity<List<ReactAppUrlDTO>> getAllReactAppUrls() {
+
+        try {
+            List<ReactAppUrlDTO> response = masterClient.getReactAppUrls(xApiKey);
+
+            if (response == null || response.isEmpty()) {
+                return ResponseEntity.noContent().build();
+            }
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 

@@ -6,10 +6,10 @@ import com.vts.hrms.entity.Calendar;
 import com.vts.hrms.entity.Course;
 import com.vts.hrms.entity.Requisition;
 import com.vts.hrms.exception.BadRequestException;
-import com.vts.hrms.exception.ExcelValidationException;
 import com.vts.hrms.exception.NotFoundException;
 import com.vts.hrms.mapper.*;
 import com.vts.hrms.repository.*;
+import com.vts.hrms.util.CommonUtil;
 import com.vts.hrms.util.FileStorageUtil;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -32,6 +32,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class TrainingService {
@@ -72,9 +73,14 @@ public class TrainingService {
     private final CepMapper cepMapper;
     private final DistributionRepository distributionRepository;
     private final DistributionMapper distributionMapper;
+    private final CepAttachmentsRepository cepAttachmentsRepository;
+    private final JournalMapper journalMapper;
+    private final JournalRepository journalRepository;
+    private final MandatoryTrainingMapper mandatoryTrainingMapper;
+    private final MandatoryTrainingRepository mandatoryTrainingRepository;
 
 
-    public TrainingService(MasterClientService masterClient, OrganizerRepository organizerRepository, OrganizerMapper organizerMapper, CalendarMapper calenderMapper, CalenderRepository calenderRepository, CourseMapper courseMapper, CourseRepository courseRepository, RequisitionMapper requisitionMapper, RequisitionRepository requisitionRepository, FeedbackMapper feedbackMapper, FeedbackRepository feedbackRepository, RequisitionTransactionRepository transactionRepository, MasterCacheService masterCacheService, NotificationRepository notificationRepository, SignRoleAuthorityRepository signRoleAuthorityRepository, RequisitionSequenceRepository sequenceRepository, EvaluationRepository evaluationRepository, EligibilityMapper eligibilityMapper, EligibilityRepository eligibilityRepository, CourseTypeRepository courseTypeRepository, LoginRepository loginRepository, CepRepository cepRepository, CepMapper cepMapper, DistributionRepository distributionRepository, DistributionMapper distributionMapper) {
+    public TrainingService(MasterClientService masterClient, OrganizerRepository organizerRepository, OrganizerMapper organizerMapper, CalendarMapper calenderMapper, CalenderRepository calenderRepository, CourseMapper courseMapper, CourseRepository courseRepository, RequisitionMapper requisitionMapper, RequisitionRepository requisitionRepository, FeedbackMapper feedbackMapper, FeedbackRepository feedbackRepository, RequisitionTransactionRepository transactionRepository, MasterCacheService masterCacheService, NotificationRepository notificationRepository, SignRoleAuthorityRepository signRoleAuthorityRepository, RequisitionSequenceRepository sequenceRepository, EvaluationRepository evaluationRepository, EligibilityMapper eligibilityMapper, EligibilityRepository eligibilityRepository, CourseTypeRepository courseTypeRepository, LoginRepository loginRepository, CepRepository cepRepository, CepMapper cepMapper, DistributionRepository distributionRepository, DistributionMapper distributionMapper, CepAttachmentsRepository cepAttachmentsRepository, JournalMapper journalMapper, JournalRepository journalRepository, MandatoryTrainingMapper mandatoryTrainingMapper, MandatoryTrainingRepository mandatoryTrainingRepository) {
         this.masterClient = masterClient;
         this.organizerRepository = organizerRepository;
         this.organizerMapper = organizerMapper;
@@ -100,6 +106,11 @@ public class TrainingService {
         this.cepMapper = cepMapper;
         this.distributionRepository = distributionRepository;
         this.distributionMapper = distributionMapper;
+        this.cepAttachmentsRepository = cepAttachmentsRepository;
+        this.journalMapper = journalMapper;
+        this.journalRepository = journalRepository;
+        this.mandatoryTrainingMapper = mandatoryTrainingMapper;
+        this.mandatoryTrainingRepository = mandatoryTrainingRepository;
     }
 
     @Transactional(readOnly = true)
@@ -202,17 +213,23 @@ public class TrainingService {
         Map<Long, Eligibility> eligibilityMap = eligibilityList.stream()
                 .collect(Collectors.toMap(Eligibility::getEligibilityId, Function.identity()));
 
+        Map<Long, CourseType> courseTypeMap = masterCacheService.getCourseTypeMap();
+
         List<CourseDTO> dtoList = courseMapper.toDto(courseList);
 
         dtoList.forEach(dto -> {
             Organizer organizer = organizerMap.get(dto.getOrganizerId());
             Eligibility eligibility = eligibilityMap.get(dto.getEligibilityId());
+            CourseType courseType = courseTypeMap.get(dto.getCourseTypeId());
 
             if (organizer != null) {
                 dto.setOrganizer(organizer.getOrganizer());
             }
             if (eligibility != null) {
                 dto.setEligibilityName(eligibility.getEligibilityName());
+            }
+            if (courseType != null) {
+                dto.setCourseType(courseType.getCourseType());
             }
         });
         return dtoList;
@@ -269,6 +286,18 @@ public class TrainingService {
             requisition.setFileBrochure(dto.getMultipartFileBrochure().getOriginalFilename());
             FileStorageUtil.saveFile(fullpath, dto.getMultipartFileBrochure().getOriginalFilename(), dto.getMultipartFileBrochure());
         }
+        if (dto.getMultipartCommitteeApproval() != null && !dto.getMultipartCommitteeApproval().isEmpty()) {
+            requisition.setFileCommitteeApproval(dto.getMultipartCommitteeApproval().getOriginalFilename());
+            FileStorageUtil.saveFile(fullpath, dto.getMultipartCommitteeApproval().getOriginalFilename(), dto.getMultipartCommitteeApproval());
+        }
+        if (dto.getMultipartAcceptanceLetter() != null && !dto.getMultipartAcceptanceLetter().isEmpty()) {
+            requisition.setFileAcceptanceLetter(dto.getMultipartAcceptanceLetter().getOriginalFilename());
+            FileStorageUtil.saveFile(fullpath, dto.getMultipartAcceptanceLetter().getOriginalFilename(), dto.getMultipartAcceptanceLetter());
+        }
+        if (dto.getMultipartPaper() != null && !dto.getMultipartPaper().isEmpty()) {
+            requisition.setFilePaper(dto.getMultipartPaper().getOriginalFilename());
+            FileStorageUtil.saveFile(fullpath, dto.getMultipartPaper().getOriginalFilename(), dto.getMultipartPaper());
+        }
 
         requisition = requisitionRepository.save(requisition);
         insertTransaction(requisition.getRequisitionId(), requisition.getInitiatingOfficer(), requisition.getInitiatingOfficer(), username, "AA", null);
@@ -286,6 +315,7 @@ public class TrainingService {
         Map<Long, EmployeeDTO> employeeMap = masterCacheService.getLongEmployeeDTOMap();
         Map<Long, Organizer> organizerMap = masterCacheService.getOrganizerMap();
         Map<Long, Course> courseMap = masterCacheService.getCourseMap();
+        Map<Long, CourseType> courseTypeMap = masterCacheService.getCourseTypeMap();
         Map<String, Status> statusMap = masterCacheService.getStatusMap();
 
         if (Arrays.asList("ROLE_ADMIN", "ROLE_AD_HRT", "ROLE_SA_HRT", "ROLE_DIRECTOR",
@@ -326,11 +356,18 @@ public class TrainingService {
 
         List<RequisitionDTO> dtoList = requisitionMapper.toDto(list);
 
+        List<Journal> journals = journalRepository.findAllByIsActiveOrderByJournalIdDesc(1);
+        Map<Long, Journal> journalMap = journals.stream()
+                        .collect(Collectors.toMap(Journal::getJournalId, Function.identity()));
+
         dtoList.forEach(dto -> {
             EmployeeDTO employeeDTO = employeeMap.get(dto.getInitiatingOfficer());
             Course course = courseMap.get(dto.getCourseId());
             Organizer organizer = organizerMap.get(course.getOrganizerId());
+            CourseType courseType = courseTypeMap.get(course.getCourseTypeId());
+
             dto.setCourseName(course.getCourseName());
+            dto.setCourseLevel(course.getCourseLevel());
             dto.setVenue(course.getVenue());
 
             Status status = statusMap.get(dto.getStatus());
@@ -348,11 +385,18 @@ public class TrainingService {
             }
             if (employeeDTO != null) {
                 dto.setEmpNo(employeeDTO.getEmpNo());
-                dto.setInitiatingOfficerName(buildEmployeeName(employeeDTO, false));
+                dto.setInitiatingOfficerName(CommonUtil.buildEmployeeName(employeeDTO, false));
                 dto.setEmpDesigName(employeeDTO.getEmpDesigName());
                 dto.setEmpDivCode(employeeDTO.getEmpDivCode());
                 dto.setEmail(employeeDTO.getEmail());
                 dto.setMobileNo(employeeDTO.getMobileNo());
+            }
+            if (courseType != null) {
+                dto.setCourseType(courseType.getCourseType());
+            }
+            if(dto.getJournalId() != null && dto.getJournalId() > 0){
+                Journal journal = journalMap.get(dto.getJournalId());
+                dto.setTitleOfPaper(journal.getTitleOfPaper());
             }
         });
         return dtoList;
@@ -366,14 +410,18 @@ public class TrainingService {
         }
         Map<Long, Organizer> organizerMap = masterCacheService.getOrganizerMap();
         Map<Long, Course> courseMap = masterCacheService.getCourseMap();
+        Map<Long, CourseType> courseTypeMap = masterCacheService.getCourseTypeMap();
 
         Requisition requisition = requisitionRepository.findById(id).orElseThrow(() -> new NotFoundException("Requisition not found"));
 
         Course course = courseMap.get(requisition.getCourseId());
         Organizer org = organizerMap.get(course.getOrganizerId());
+        CourseType courseType = courseTypeMap.get(course.getCourseTypeId());
+
 
         RequisitionDTO requisitionDTO = requisitionMapper.toDto(requisition);
         requisitionDTO.setOrganizer(org.getOrganizer());
+        requisitionDTO.setCourseType(courseType.getCourseType());
         requisitionDTO.setOrganizerId(org.getOrganizerId());
         requisitionDTO.setCourseName(course.getCourseName());
         requisitionDTO.setVenue(course.getVenue());
@@ -403,6 +451,12 @@ public class TrainingService {
                     updateFile(dto.getMultipartFilePan(), existingReq.getFilePan(), fullpath, existingReq::setFilePan);
                     // Brochure
                     updateFile(dto.getMultipartFileBrochure(), existingReq.getFileBrochure(), fullpath, existingReq::setFileBrochure);
+                    // Committee Approval Letter
+                    updateFile(dto.getMultipartCommitteeApproval(), existingReq.getFileCommitteeApproval(), fullpath, existingReq::setFileCommitteeApproval);
+                    // Paper Acceptance Letter
+                    updateFile(dto.getMultipartAcceptanceLetter(), existingReq.getFileAcceptanceLetter(), fullpath, existingReq::setFileAcceptanceLetter);
+                    // Paper
+                    updateFile(dto.getMultipartPaper(), existingReq.getFilePaper(), fullpath, existingReq::setFilePaper);
 
                     requisitionMapper.partialUpdate(existingReq, dto);
                     return existingReq;
@@ -532,7 +586,7 @@ public class TrainingService {
             EmployeeDTO employeeDTO = employeeMap.get(d.getParticipantId());
 
             if (employeeDTO != null) {
-                d.setParticipantName(buildEmployeeName(employeeDTO, true));
+                d.setParticipantName(CommonUtil.buildEmployeeName(employeeDTO, true));
                 d.setDivisionName(employeeDTO.getEmpDivCode());
             }
 
@@ -623,13 +677,15 @@ public class TrainingService {
         if ("RS".equalsIgnoreCase(requisition.getStatus())) {
             requisition.setStatus("SF");
 
-            SignRoleAuthorityDTO authorityDTO = signRoleAuthorityRepository.findBySignAuthRole("SA-HRT");
-            if (authorityDTO == null || authorityDTO.getSignRoleAuthorityId() == null) {
+            List<SignRoleAuthorityDTO> authorityDTOList = signRoleAuthorityRepository.findBySignAuthRole("SA-HRT");
+            if (authorityDTOList.isEmpty()) {
                 throw new NotFoundException("In SignRoleAuthority SA-HRT role not found");
             }
 
-            insertTransaction(dto.getRequisitionId(), dto.getActionBy(), authorityDTO.getEmpId(), username, "SF", null);
-            insertNotification(dto.getActionBy(), authorityDTO.getEmpId(), "req-approval", message, username);
+            for (SignRoleAuthorityDTO authorityDTO : authorityDTOList) {
+                insertTransaction(dto.getRequisitionId(), dto.getActionBy(), authorityDTO.getEmpId(), username, "SF", null);
+                insertNotification(dto.getActionBy(), authorityDTO.getEmpId(), "req-approval", message, username);
+            }
         } else {
             requisition.setStatus("AF");
             DivisionDTO divisionDTO = Optional.of(employeeDTO)
@@ -664,8 +720,8 @@ public class TrainingService {
         if (requisition.getStatus().equalsIgnoreCase("AS") || requisition.getStatus().equalsIgnoreCase("CA")) {
             if (requisition.getRegistrationFee().longValue() > 0 && !requisition.getStatus().equalsIgnoreCase("CA")) {
                 requisition.setStatus("CA");
-                SignRoleAuthorityDTO authorityDTO = signRoleAuthorityRepository.findBySignAuthRole("AD-HRT");
-                if (authorityDTO == null || authorityDTO.getSignRoleAuthorityId() == null) {
+                List<SignRoleAuthorityDTO> authorityDTOList = signRoleAuthorityRepository.findBySignAuthRole("AD-HRT");
+                if (authorityDTOList.isEmpty()) {
                     throw new NotFoundException("In SignRoleAuthority AD-HRT role not found");
                 }
 
@@ -673,8 +729,10 @@ public class TrainingService {
                 EmployeeDTO employeeDTO = employeeMap.get(dto.getActionBy());
 
                 String message = getNotificationMsg(requisition.getRequisitionNumber(), employeeDTO, "Forward by");
-                insertTransaction(dto.getRequisitionId(), dto.getActionBy(), authorityDTO.getEmpId(), username, "CA", null);
-                insertNotification(dto.getActionBy(), authorityDTO.getEmpId(), "req-approval", message, username);
+                for (SignRoleAuthorityDTO authorityDTO : authorityDTOList) {
+                    insertTransaction(dto.getRequisitionId(), dto.getActionBy(), authorityDTO.getEmpId(), username, "CA", null);
+                    insertNotification(dto.getActionBy(), authorityDTO.getEmpId(), "req-approval", message, username);
+                }
             } else {
                 requisition.setStatus("AV");
                 insertTransaction(dto.getRequisitionId(), dto.getActionBy(), dto.getActionBy(), username, "AV", null);
@@ -682,8 +740,8 @@ public class TrainingService {
         } else if (requisition.getStatus().equalsIgnoreCase("AF")) {
             requisition.setStatus("AR");
 
-            SignRoleAuthorityDTO authorityDTO = signRoleAuthorityRepository.findBySignAuthRole("SA-HRT");
-            if (authorityDTO == null || authorityDTO.getSignRoleAuthorityId() == null) {
+            List<SignRoleAuthorityDTO> authorityDTOList = signRoleAuthorityRepository.findBySignAuthRole("SA-HRT");
+            if (authorityDTOList.isEmpty()) {
                 throw new NotFoundException("In SignRoleAuthority SA-HRT role not found");
             }
 
@@ -691,23 +749,25 @@ public class TrainingService {
             EmployeeDTO employeeDTO = employeeMap.get(dto.getActionBy());
 
             String message = getNotificationMsg(requisition.getRequisitionNumber(), employeeDTO, "Forward by");
-            insertTransaction(dto.getRequisitionId(), dto.getActionBy(), authorityDTO.getEmpId(), username, "AR", null);
-            insertNotification(dto.getActionBy(), authorityDTO.getEmpId(), "req-approval", message, username);
+            for (SignRoleAuthorityDTO authorityDTO : authorityDTOList) {
+                insertTransaction(dto.getRequisitionId(), dto.getActionBy(), authorityDTO.getEmpId(), username, "AR", null);
+                insertNotification(dto.getActionBy(), authorityDTO.getEmpId(), "req-approval", message, username);
+            }
         } else if (requisition.getStatus().equalsIgnoreCase("AR") || requisition.getStatus().equalsIgnoreCase("SF")) {
             requisition.setStatus("AS");
 
-            SignRoleAuthorityDTO authorityDTO;
+            List<SignRoleAuthorityDTO> authorityDTOList;
             String notFoundMsg;
 
             if (requisition.getRegistrationFee().longValue() > 0) {
-                authorityDTO = signRoleAuthorityRepository.findBySignAuthRole("CAG-Div");
+                authorityDTOList = signRoleAuthorityRepository.findBySignAuthRole("CAG-Div");
                 notFoundMsg = "In SignRoleAuthority CAG role not found";
             } else {
-                authorityDTO = signRoleAuthorityRepository.findBySignAuthRole("AD-HRT");
+                authorityDTOList = signRoleAuthorityRepository.findBySignAuthRole("AD-HRT");
                 notFoundMsg = "In SignRoleAuthority AD-HRT role not found";
             }
 
-            if (authorityDTO == null || authorityDTO.getSignRoleAuthorityId() == null) {
+            if (authorityDTOList.isEmpty()) {
                 throw new NotFoundException(notFoundMsg);
             }
 
@@ -716,8 +776,10 @@ public class TrainingService {
             EmployeeDTO employeeDTO = employeeMap.get(dto.getActionBy());
 
             String message = getNotificationMsg(requisition.getRequisitionNumber(), employeeDTO, "Forward by");
-            insertTransaction(dto.getRequisitionId(), dto.getActionBy(), authorityDTO.getEmpId(), username, "AS", null);
-            insertNotification(dto.getActionBy(), authorityDTO.getEmpId(), "req-approval", message, username);
+            for (SignRoleAuthorityDTO authorityDTO : authorityDTOList) {
+                insertTransaction(dto.getRequisitionId(), dto.getActionBy(), authorityDTO.getEmpId(), username, "AS", null);
+                insertNotification(dto.getActionBy(), authorityDTO.getEmpId(), "req-approval", message, username);
+            }
         }
         requisition.setModifiedBy(username);
         requisition.setModifiedDate(LocalDateTime.now());
@@ -801,7 +863,7 @@ public class TrainingService {
         if (initiator != null) {
             dto.setEmpNo(initiator.getEmpNo());
             dto.setInitiatingOfficerName(
-                    buildEmployeeName(initiator, false)
+                    CommonUtil.buildEmployeeName(initiator, false)
             );
             dto.setEmpDesigName(initiator.getEmpDesigName());
             dto.setEmpDivCode(initiator.getEmpDivCode());
@@ -835,51 +897,19 @@ public class TrainingService {
 
         if (verified != null) {
             dto.setVerifiedOfficerName(
-                    buildEmployeeName(verified, true)
+                    CommonUtil.buildEmployeeName(verified, true)
             );
         }
 
         if (approved != null) {
             dto.setApprovedOfficerName(
-                    buildEmployeeName(approved, true)
+                    CommonUtil.buildEmployeeName(approved, true)
             );
         }
 
         return dto;
     }
 
-    private String buildEmployeeName(EmployeeDTO emp, boolean includeDesignation) {
-
-        if (emp == null) return "";
-
-        String title = Optional.ofNullable(emp.getTitle())
-                .filter(t -> !t.isBlank())
-                .orElse(null);
-
-        String salutation = Optional.ofNullable(emp.getSalutation())
-                .filter(s -> !s.isBlank())
-                .orElse(null);
-
-        String name = Optional.ofNullable(emp.getEmpName()).orElse("");
-        String designation = Optional.ofNullable(emp.getEmpDesigName()).orElse("");
-
-        // Priority: Salutation → Title → Nothing
-        String prefix = salutation != null ? salutation : (title != null ? title : "");
-
-        StringBuilder fullName = new StringBuilder();
-
-        if (!prefix.isBlank()) {
-            fullName.append(prefix).append(" ");
-        }
-
-        fullName.append(name);
-
-        if (includeDesignation && !designation.isBlank()) {
-            fullName.append(", ").append(designation);
-        }
-
-        return fullName.toString().trim();
-    }
 
     @Transactional(readOnly = true)
     public List<RequisitionDTO> getRequisitionApprovalList(Long empId, String username) {
@@ -960,7 +990,7 @@ public class TrainingService {
                 if (txn.getActionBy() != null) {
                     EmployeeDTO forwarded = employeeMap.get(txn.getActionBy());
                     if (forwarded != null) {
-                        dto.setForwardByName(buildEmployeeName(forwarded, true));
+                        dto.setForwardByName(CommonUtil.buildEmployeeName(forwarded, true));
                     }
                 }
             }
@@ -972,7 +1002,7 @@ public class TrainingService {
     @Transactional(readOnly = true)
     public List<RequisitionTransactionDTO> getRequisitionTransaction(Long reqId, String username) {
         log.info("Request to fetch Requisition transaction data for requisitionId {} by {}", reqId, username);
-        List<RequisitionTransaction> transactionList = transactionRepository.findAllByRequisitionIdAndIsActive(reqId, 1);
+        List<RequisitionTransaction> transactionList = transactionRepository.findFilteredTransactions(reqId);
 
         Map<String, Status> statusMap = masterCacheService.getStatusMap();
         Map<Long, EmployeeDTO> employeeMap = masterCacheService.getLongEmployeeDTOMap();
@@ -990,9 +1020,9 @@ public class TrainingService {
             dto.setRequisitionId(data.getRequisitionId());
             dto.setActionDate(data.getActionDate());
             dto.setForwardBy(data.getActionBy());
-            dto.setForwardByName(buildEmployeeName(employeeBy, true));
+            dto.setForwardByName(CommonUtil.buildEmployeeName(employeeBy, true));
             dto.setForwardTo(data.getActionTo());
-            dto.setForwardToName(buildEmployeeName(employeeTo, true));
+            dto.setForwardToName(CommonUtil.buildEmployeeName(employeeTo, true));
             dto.setStatusCode(data.getStatusCode());
             dto.setStatusDetail(status != null ? status.getStatusName() : "");
             dto.setColorCode(status != null ? status.getColorCode() : "");
@@ -1204,7 +1234,7 @@ public class TrainingService {
         EmployeeDTO employeeDTO = employeeMap.get(feedback.getParticipantId());
 
         if (employeeDTO != null) {
-            dto.setParticipantName(buildEmployeeName(employeeDTO, true));
+            dto.setParticipantName(CommonUtil.buildEmployeeName(employeeDTO, true));
             dto.setDivisionName(employeeDTO.getEmpDivCode());
         }
 
@@ -1325,12 +1355,12 @@ public class TrainingService {
         dto.setToDate(reqDTO.getToDate());
         dto.setProgramDuration(reqDTO.getDuration());
         dto.setOrganizer(reqDTO.getOrganizer());
-        dto.setParticipantName(buildEmployeeName(employee, true));
+        dto.setParticipantName(CommonUtil.buildEmployeeName(employee, true));
         dto.setDivisionName(employee.getEmpDivCode());
 
         if ("Y".equalsIgnoreCase(dto.getIsAccepted())) {
             EmployeeDTO acceptEmp = masterClient.getEmployee(xApiKey, feedback.getAcceptedBy()).get(0);
-            dto.setAcceptedByName(buildEmployeeName(acceptEmp, true));
+            dto.setAcceptedByName(CommonUtil.buildEmployeeName(acceptEmp, true));
         }
 
         return dto;
@@ -1400,7 +1430,7 @@ public class TrainingService {
             if (dto.getInitiatingOfficer() != null) {
                 EmployeeDTO employeeDTO = employeeMap.get(dto.getInitiatingOfficer());
                 if (employeeDTO != null) {
-                    dto.setInitiatingOfficerName(buildEmployeeName(employeeDTO, false));
+                    dto.setInitiatingOfficerName(CommonUtil.buildEmployeeName(employeeDTO, false));
                     dto.setEmpDesigName(employeeDTO.getEmpDesigName());
                 }
             }
@@ -1531,14 +1561,21 @@ public class TrainingService {
     public List<CepDTO> getAllCepData(String username) {
         log.info("Request to fetch CEP list by {}", username);
 
-        List<Cep> cepList = cepRepository.findAllByIsActive(1);
+        List<Cep> cepList = cepRepository.findAllByIsActiveOrderByCepIdDesc(1);
         List<CepDTO> dtoList = cepMapper.toDto(cepList);
 
         Map<Long, DivisionDTO> divisionDTOMap = masterCacheService.getDivisionDTOMap();
+        Map<Long, EmployeeDTO> employeeDTOMap = masterCacheService.getLongEmployeeDTOMap();
 
         dtoList.forEach(data -> {
             DivisionDTO divisionDTO = divisionDTOMap.get(data.getDivisionId());
-            data.setDivisionCode(divisionDTO.getDivisionName());
+
+            EmployeeDTO coordinator = employeeDTOMap.get(data.getCourseCoordinatorId());
+            EmployeeDTO deputyCoordinator = employeeDTOMap.get(data.getDeputyCourseCoordinatorId());
+
+            data.setDivisionCode(divisionDTO.getDivisionShortName());
+            data.setCourseCoordinatorName(CommonUtil.buildEmployeeName(coordinator, true));
+            data.setDeputyCourseCoordinatorName(CommonUtil.buildEmployeeName(deputyCoordinator, true));
         });
         return dtoList;
     }
@@ -1553,13 +1590,26 @@ public class TrainingService {
         Cep cep = cepRepository.findById(cepId)
                 .orElseThrow(() -> new NotFoundException("CEP data not found"));
 
-        return cepMapper.toDto(cep);
+        CepDTO dto = cepMapper.toDto(cep);
+
+        List<CepAttachments> attachments = cepAttachmentsRepository.findByCepId(cepId);
+        List<CepAttachmentsDTO> dtoList = new ArrayList<>();
+        for (CepAttachments cepData : attachments) {
+            CepAttachmentsDTO attachDto = new CepAttachmentsDTO();
+            attachDto.setAttachmentId(cepData.getAttachmentId());
+            attachDto.setAttachmentName(cepData.getAttachmentName());
+            attachDto.setExistingFileName(cepData.getAttachFile());
+            dtoList.add(attachDto);
+        }
+
+        dto.setCepAttachments(dtoList);
+        return dto;
     }
 
 
-    @CacheEvict(value = "cepListCache", allEntries = true)
+    @CacheEvict(value = {"cepListCache", "cepReportCache"}, allEntries = true)
     @Transactional
-    public CepDTO addCepData(@Valid CepDTO dto, String username) {
+    public CepDTO addCepData(@Valid CepDTO dto, String username) throws IOException {
         log.info("Request to add CEP by {}", username);
 
         if (dto.getFromDate() != null && dto.getToDate() != null && dto.getToDate().isBefore(dto.getFromDate())) {
@@ -1577,15 +1627,40 @@ public class TrainingService {
         cep.setIsActive(1);
 
         cep = cepRepository.save(cep);
+
+        List<CepAttachments> attachments = new ArrayList<>();
+
+        for (CepAttachmentsDTO attachmentsDTO : dto.getCepAttachments()) {
+            CepAttachments attach = new CepAttachments();
+            attach.setCepId(cep.getCepId());
+            attach.setAttachmentName(attachmentsDTO.getAttachmentName());
+
+            if (attachmentsDTO.getAttachFile() != null && !attachmentsDTO.getAttachFile().isEmpty()) {
+                String folderName = "CEP_" + cep.getCepId();
+                Path filepath = Paths.get(appStorage, "CEP Attachments", folderName);
+                FileStorageUtil.saveFile(filepath, attachmentsDTO.getAttachFile().getOriginalFilename(), attachmentsDTO.getAttachFile());
+                attach.setAttachFile(attachmentsDTO.getAttachFile().getOriginalFilename());
+            }
+
+            attach.setCreatedBy(username);
+            attach.setCreatedDate(LocalDateTime.now());
+            attach.setIsActive(1);
+            attachments.add(attach);
+        }
+        cepAttachmentsRepository.saveAll(attachments);
+
         return cepMapper.toDto(cep);
     }
 
-    @CacheEvict(value = "cepListCache", allEntries = true)
+    @CacheEvict(value = {"cepListCache", "cepReportCache"}, allEntries = true)
     @Transactional
-    public Optional<CepDTO> editCEPData(@Valid CepDTO dto, String username) {
+    public Optional<CepDTO> editCEPData(@Valid CepDTO dto, String username) throws IOException {
+
         log.info("Request to edit CEP for id {} by {}", dto.getCepId(), username);
 
-        if (dto.getFromDate() != null && dto.getToDate() != null && dto.getToDate().isBefore(dto.getFromDate())) {
+        // 👉 Validations
+        if (dto.getFromDate() != null && dto.getToDate() != null &&
+                dto.getToDate().isBefore(dto.getFromDate())) {
             throw new BadRequestException("To date cannot be before From date");
         }
 
@@ -1594,7 +1669,108 @@ public class TrainingService {
             throw new BadRequestException("Amount spent cannot exceed total amount");
         }
 
-        return cepRepository.findById(dto.getCepId()).map(existing -> {
+        // 👉 Fetch existing attachments
+        List<CepAttachments> existingAttachments =
+                cepAttachmentsRepository.findByCepId(dto.getCepId());
+
+        List<CepAttachments> updatedAttachments = new ArrayList<>();
+
+        // 👉 Folder path
+        String folderName = "CEP_" + dto.getCepId();
+        Path filepath = Paths.get(appStorage, "CEP Attachments", folderName);
+
+        // =========================================================
+        // 👉 1. HANDLE ADD / UPDATE
+        // =========================================================
+        for (CepAttachmentsDTO attachmentsDTO : dto.getCepAttachments()) {
+
+            // Skip empty rows (important)
+            if ((attachmentsDTO.getAttachmentName() == null || attachmentsDTO.getAttachmentName().isBlank())
+                    && (attachmentsDTO.getAttachFile() == null || attachmentsDTO.getAttachFile().isEmpty())
+                    && attachmentsDTO.getAttachmentId() == null) {
+                continue;
+            }
+
+            CepAttachments attach;
+
+            // 👉 EXISTING
+            if (attachmentsDTO.getAttachmentId() != null) {
+
+                attach = existingAttachments.stream()
+                        .filter(a -> a.getAttachmentId().equals(attachmentsDTO.getAttachmentId()))
+                        .findFirst()
+                        .orElseThrow(() -> new BadRequestException("Attachment not found"));
+
+                attach.setModifiedBy(username);
+                attach.setModifiedDate(LocalDateTime.now());
+
+            } else {
+                // 👉 NEW
+                attach = new CepAttachments();
+                attach.setCepId(dto.getCepId());
+                attach.setCreatedBy(username);
+                attach.setCreatedDate(LocalDateTime.now());
+                attach.setIsActive(1);
+            }
+
+            // 👉 Update name
+            attach.setAttachmentName(attachmentsDTO.getAttachmentName());
+
+            // 👉 FILE REPLACEMENT
+            if (attachmentsDTO.getAttachFile() != null &&
+                    !attachmentsDTO.getAttachFile().isEmpty()) {
+
+                // Delete old file if exists
+                if (attach.getAttachFile() != null) {
+                    FileStorageUtil.deleteFileIfExists(filepath, attach.getAttachFile());
+                }
+
+                // Save new file
+                String fileName = attachmentsDTO.getAttachFile().getOriginalFilename();
+
+                FileStorageUtil.saveFile(
+                        filepath,
+                        fileName,
+                        attachmentsDTO.getAttachFile()
+                );
+
+                attach.setAttachFile(fileName);
+            }
+
+            updatedAttachments.add(attach);
+        }
+
+        // =========================================================
+        // 👉 2. HANDLE DELETE (REMOVED FROM UI)
+        // =========================================================
+        List<Long> incomingIds = dto.getCepAttachments().stream()
+                .filter(a -> a.getAttachmentId() != null)
+                .map(CepAttachmentsDTO::getAttachmentId)
+                .toList();
+
+        for (CepAttachments existing : existingAttachments) {
+
+            if (existing.getAttachmentId() != null &&
+                    !incomingIds.contains(existing.getAttachmentId())) {
+
+                // Delete file
+                if (existing.getAttachFile() != null) {
+                    FileStorageUtil.deleteFileIfExists(filepath, existing.getAttachFile());
+                }
+
+                // Delete DB record
+                cepAttachmentsRepository.delete(existing);
+            }
+        }
+
+        // 👉 Save updated & new attachments
+        cepAttachmentsRepository.saveAll(updatedAttachments);
+
+        // =========================================================
+        // 👉 3. UPDATE MAIN CEP
+        // =========================================================
+        return cepRepository.findById(dto.getCepId())
+                .map(existing -> {
                     existing.setModifiedBy(username);
                     existing.setModifiedDate(LocalDateTime.now());
                     cepMapper.partialUpdate(existing, dto);
@@ -1602,7 +1778,6 @@ public class TrainingService {
                 })
                 .map(cepRepository::save)
                 .map(cepMapper::toDto);
-
     }
 
     @Cacheable(value = "distributionCache", key = "#username")
@@ -1620,9 +1795,15 @@ public class TrainingService {
             EmployeeDTO aoEmpDto = employeeDTOMap.get(data.getAoEmpId());
             EmployeeDTO roEmpDto = employeeDTOMap.get(data.getRoEmpId());
 
-            data.setEmployeeName(buildEmployeeName(employeeDTO, true));
-            data.setAoOfficerName(buildEmployeeName(aoEmpDto, true));
-            data.setRoOfficerName(buildEmployeeName(roEmpDto, true));
+            if (employeeDTO != null) {
+                data.setEmpNo(employeeDTO.getEmpNo());
+                data.setEmployeeName(CommonUtil.buildEmployeeName(employeeDTO, true));
+                data.setDesigCadre(employeeDTO.getDesigCadre());
+                data.setEmpDivCode(employeeDTO.getEmpDivCode());
+            }
+
+            data.setAoOfficerName(aoEmpDto != null ? CommonUtil.buildEmployeeName(aoEmpDto, true) : "");
+            data.setRoOfficerName(roEmpDto != null ? CommonUtil.buildEmployeeName(roEmpDto, true) : "");
 
         });
 
@@ -1641,7 +1822,7 @@ public class TrainingService {
         return distributionMapper.toDto(distribution);
     }
 
-    @CacheEvict(value = "distributionCache", allEntries = true)
+    @CacheEvict(value = {"distributionCache", "hrDistributionReportCache"}, allEntries = true)
     @Transactional
     public DistributionDTO addDistributionData(@Valid DistributionDTO dto, String username) {
         log.info("Request to add Distribution by {}", username);
@@ -1657,7 +1838,7 @@ public class TrainingService {
         return distributionMapper.toDto(distribution);
     }
 
-    @CacheEvict(value = "distributionCache", allEntries = true)
+    @CacheEvict(value = {"distributionCache", "hrDistributionReportCache"}, allEntries = true)
     public Optional<DistributionDTO> editDistributionData(@Valid DistributionDTO dto, String username) {
         log.info("Request to edit distribution id {} by {}", dto.getDistributionId(), username);
 
@@ -1700,5 +1881,161 @@ public class TrainingService {
                 .map(calenderRepository::save)
                 .map(calenderMapper::toDto);
 
+    }
+
+    public CepAttachmentsDTO getCepAttachmentById(Long attachmentId, String username) {
+        log.info("Request to get CEp attachment data for id {} by {}", attachmentId, username);
+
+        CepAttachments entity = cepAttachmentsRepository.findById(attachmentId)
+                .orElseThrow(() -> new NotFoundException("CEP Attachment data not found"));
+
+        CepAttachmentsDTO dto = new CepAttachmentsDTO();
+
+        dto.setCepId(entity.getCepId());
+        dto.setAttachmentId(entity.getAttachmentId());
+        dto.setAttachmentName(entity.getAttachmentName());
+        dto.setExistingFileName(entity.getAttachFile());
+
+        return dto;
+    }
+
+    @Cacheable(value = "journalCache", key = "#username")
+    public List<JournalDTO> getJournalList(Long empId, String roleName, String username) {
+        log.info("Request to fetch journal list by {}", username);
+
+        List<Journal> journals = new ArrayList<>();
+
+        if("ROLE_USER".equalsIgnoreCase(roleName)){
+            journals = journalRepository.findAllByEmpIdAndIsActiveOrderByJournalIdDesc(empId, 1);
+        }else{
+            journals = journalRepository.findAllByIsActiveOrderByJournalIdDesc(1);
+        }
+
+        List<JournalDTO> dtoList = journalMapper.toDto(journals);
+
+        Map<Long, EmployeeDTO> employeeDTOMap = masterCacheService.getLongEmployeeDTOMap();
+
+        dtoList.forEach(data -> {
+
+            EmployeeDTO empDto = employeeDTOMap.get(data.getEmpId());
+            if (empDto != null) {
+                data.setEmployeeName(CommonUtil.buildEmployeeName(empDto, true));
+                data.setEmpNo(empDto.getEmpNo());
+                data.setDesigCadre(empDto.getDesigCadre());
+            }
+        });
+        return dtoList;
+    }
+
+    @CacheEvict(value = "journalCache", allEntries = true)
+    @Transactional
+    public JournalDTO addJournalData(@Valid JournalDTO dto, String username) {
+        log.info("Request to add journal by {}", username);
+
+        Journal journal = journalMapper.toEntity(dto);
+
+        journal.setCreatedBy(username);
+        journal.setCreatedDate(LocalDateTime.now());
+        journal.setIsActive(1);
+
+        journal = journalRepository.save(journal);
+        return journalMapper.toDto(journal);
+    }
+
+    @CacheEvict(value = "journalCache", allEntries = true)
+    @Transactional
+    public Optional<JournalDTO> editJournalData(@Valid JournalDTO dto, String username) {
+        log.info("Request to update journal for id {} by {}", dto.getJournalId(), username);
+
+        return journalRepository.findById(dto.getJournalId())
+                .map(ex -> {
+                    ex.setModifiedBy(username);
+                    ex.setModifiedDate(LocalDateTime.now());
+                    journalMapper.partialUpdate(ex, dto);
+                    return ex;
+                })
+                .map(journalRepository::save)
+                .map(journalMapper::toDto);
+    }
+
+    @Cacheable(value = "mandatoryTrainingCache", key = "#username")
+    public List<MandatoryTrainingDTO> getMandatoryTrainingList(Long empId, String roleName, String username) {
+        log.info("Request to fetch mandatory training list by {}", username);
+
+        List<MandatoryTraining> mandatoryTrainings = new ArrayList<>();
+
+        if (Stream.of("ROLE_ADMIN", "ROLE_AD_HRT", "ROLE_SA_HRT", "ROLE_DH", "ROLE_DIRECTOR").anyMatch(roleName::equalsIgnoreCase)) {
+            mandatoryTrainings = mandatoryTrainingRepository.findAllByIsActiveOrderByMandatoryTrainingIdDesc(1);
+        } else {
+            mandatoryTrainings = mandatoryTrainingRepository.findAllByParticipantIdAndIsActiveOrderByMandatoryTrainingIdDesc(empId, 1);
+        }
+
+        List<MandatoryTrainingDTO> dtoList = mandatoryTrainingMapper.toDto(mandatoryTrainings);
+
+        Map<Long, EmployeeDTO> employeeDTOMap = masterCacheService.getLongEmployeeDTOMap();
+
+        dtoList.forEach(data -> {
+            EmployeeDTO empDto = employeeDTOMap.get(data.getParticipantId());
+            if (empDto != null) {
+                data.setParticipantName(CommonUtil.buildEmployeeName(empDto, true));
+            }
+        });
+        return dtoList;
+    }
+
+
+    @CacheEvict(value = "mandatoryTrainingCache", allEntries = true)
+    @Transactional
+    public MandatoryTrainingDTO addMandatoryTrainingData(@Valid MandatoryTrainingDTO dto, String username) {
+        log.info("Request to add mandatory training by {}", username);
+
+        MandatoryTraining training = mandatoryTrainingMapper.toEntity(dto);
+
+        training.setCreatedBy(username);
+        training.setCreatedDate(LocalDateTime.now());
+        training.setIsActive(1);
+
+        training = mandatoryTrainingRepository.save(training);
+        return mandatoryTrainingMapper.toDto(training);
+    }
+
+
+    @CacheEvict(value = "mandatoryTrainingCache", allEntries = true)
+    @Transactional
+    public Optional<MandatoryTrainingDTO> editMandatoryTrainingData(@Valid MandatoryTrainingDTO dto, String username) {
+        log.info("Request to update mandatory training for id {} by {}", dto.getMandatoryTrainingId(), username);
+
+        return mandatoryTrainingRepository.findById(dto.getMandatoryTrainingId())
+                .map(ex -> {
+                    ex.setModifiedBy(username);
+                    ex.setModifiedDate(LocalDateTime.now());
+                    mandatoryTrainingMapper.partialUpdate(ex, dto);
+                    return ex;
+                })
+                .map(mandatoryTrainingRepository::save)
+                .map(mandatoryTrainingMapper::toDto);
+    }
+
+    public MandatoryTrainingDTO getMandatoryTrainingById(Long trainId, String username) {
+        log.info("Request to fetch mandatory training by id {} by {}", trainId, username);
+
+        if (trainId == null) {
+            throw new NotFoundException("Mandatory training id cannot be null");
+        }
+        MandatoryTraining training = mandatoryTrainingRepository.findById(trainId)
+                .orElseThrow(() -> new NotFoundException("Mandatory training data not found"));
+
+        return mandatoryTrainingMapper.toDto(training);
+    }
+
+    public List<MandatoryTrainingDTO> getMandatoryTrainingByParticipantId(Long id, String username) {
+        log.info("Request to fetch mandatory training by participant id {} by {}", id, username);
+        if (id == null) {
+            throw new NotFoundException("Participant id cannot be null");
+        }
+        List<MandatoryTraining> trainingList = mandatoryTrainingRepository
+                .findAllByParticipantIdAndIsActiveOrderByMandatoryTrainingIdDesc(id,1);
+
+        return mandatoryTrainingMapper.toDto(trainingList);
     }
 }
