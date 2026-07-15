@@ -18,6 +18,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -197,7 +198,7 @@ public class TrainingService {
         if (orgId == null) {
             return List.of();
         }
-        List<Course> courseList = new ArrayList<>();
+        List<Course> courseList;
         if (orgId > 0) {
             courseList = courseRepository.findAllByOrganizerIdAndIsActive(orgId, 1);
         } else {
@@ -309,10 +310,16 @@ public class TrainingService {
     }
 
     @Transactional(readOnly = true)
-    public List<RequisitionDTO> getRequisitionList(Long empId, String roleName, LocalDate fromDate, LocalDate toDate, Long selectedEmployeeId, String username, String isMandatory) {
-        log.info("Requisition list fetched for role {} by {}", roleName, username);
+    public List<RequisitionDTO> getRequisitionList(
+            Long empId,
+            String roleName,
+            LocalDate fromDate,
+            LocalDate toDate,
+            Long selectedEmployeeId,
+            String username,
+            String isMandatory) {
 
-        List<Requisition> list = new ArrayList<>();
+        log.info("Requisition list fetched for role {} by {}", roleName, username);
 
         List<EmployeeDTO> employeeList = masterClient.getEmployeeMasterList(xApiKey);
 
@@ -322,104 +329,167 @@ public class TrainingService {
         Map<Long, CourseType> courseTypeMap = masterCacheService.getCourseTypeMap();
         Map<String, Status> statusMap = masterCacheService.getStatusMap();
 
-        if (Arrays.asList("ROLE_ADMIN", "ROLE_AD_HRT", "ROLE_SA_HRT", "ROLE_DIRECTOR",
-                "ROLE_CAG_DIV", "ROLE_TCG_DIV", "ROLE_SM_HRT").contains(roleName)) {
+        List<Requisition> requisitions = fetchRequisitions(roleName, empId, employeeList);
 
-            list = requisitionRepository
-                    .findAllByIsActiveOrderByRequisitionIdDesc(1);
-
-        } else if ("ROLE_DH".equalsIgnoreCase(roleName)) {
-
-            List<DivisionDTO> divisionList = masterClient.getDivisionMaster(xApiKey);
-
-            Optional<DivisionDTO> divisionOpt = divisionList.stream()
-                    .filter(d -> Objects.equals(d.getDivisionHeadId(), empId))
-                    .findFirst();
-
-            if (divisionOpt.isPresent()) {
-
-                Long divisionId = divisionOpt.get().getDivisionId();
-                List<Long> empIds = employeeList.stream()
-                        .filter(e -> labCode != null && labCode.equalsIgnoreCase(e.getLabCode()))
-                        .filter(emp -> Objects.equals(emp.getDivisionId(), divisionId))
-                        .map(EmployeeDTO::getEmpId)
-                        .collect(Collectors.toList());
-
-                list = requisitionRepository
-                        .findAllByInitiatingOfficerInAndIsActiveOrderByRequisitionIdDesc(empIds, 1);
-
-            } else {
-                list = new ArrayList<>();
-            }
-
-        } else {
-
-            list = requisitionRepository
-                    .findAllByInitiatingOfficerAndIsActiveOrderByRequisitionIdDesc(empId, 1);
-        }
-
-        if (fromDate != null && toDate != null) { // filtering as per date for requisition list page
-            list = list.stream()
+        if (fromDate != null && toDate != null) {
+            requisitions = requisitions.stream()
                     .filter(r -> r.getFromDate() != null
                             && !r.getFromDate().isBefore(fromDate)
                             && !r.getFromDate().isAfter(toDate))
                     .toList();
-            if (selectedEmployeeId != null && selectedEmployeeId > 0) { // for particular employee filters in list page
-                list = list.stream()
-                        .filter(r -> Objects.equals(r.getInitiatingOfficer(), selectedEmployeeId)).toList();
-            }
         }
 
-        List<RequisitionDTO> dtoList = requisitionMapper.toDto(list);
+        if (selectedEmployeeId != null && selectedEmployeeId > 0) {
+            requisitions = requisitions.stream()
+                    .filter(r -> Objects.equals(r.getInitiatingOfficer(), selectedEmployeeId))
+                    .toList();
+        }
 
-        dtoList = dtoList.stream()
-                .filter(dto -> isMandatory.equalsIgnoreCase(dto.getIsMandatory()))
-                .toList();
+        if (StringUtils.hasText(isMandatory)) {
+            requisitions = requisitions.stream()
+                    .filter(r -> isMandatory.equalsIgnoreCase(r.getIsMandatory()))
+                    .toList();
+        }
 
-        List<Journal> journals = journalRepository.findAllByIsActiveOrderByJournalIdDesc(1);
-        Map<Long, Journal> journalMap = journals.stream()
+        List<RequisitionDTO> dtoList = requisitionMapper.toDto(requisitions);
+
+        Map<Long, Journal> journalMap = journalRepository
+                .findAllByIsActiveOrderByJournalIdDesc(1)
+                .stream()
                 .collect(Collectors.toMap(Journal::getJournalId, Function.identity()));
 
         dtoList.forEach(dto -> {
-            EmployeeDTO employeeDTO = employeeMap.get(dto.getInitiatingOfficer());
-            Course course = courseMap.get(dto.getCourseId());
-            Organizer organizer = organizerMap.get(course.getOrganizerId());
-            CourseType courseType = courseTypeMap.get(course.getCourseTypeId());
 
-            dto.setCourseName(course.getCourseName());
-            dto.setCourseLevel(course.getCourseLevel());
-            dto.setVenue(course.getVenue());
+            EmployeeDTO employee = employeeMap.get(dto.getInitiatingOfficer());
+
+            if (employee != null) {
+                dto.setEmpNo(employee.getEmpNo());
+                dto.setInitiatingOfficerName(CommonUtil.buildEmployeeName(employee, false));
+                dto.setEmpDesigName(employee.getEmpDesigName());
+                dto.setEmpDivCode(employee.getEmpDivCode());
+                dto.setEmail(employee.getEmail());
+                dto.setMobileNo(employee.getMobileNo());
+            }
 
             Status status = statusMap.get(dto.getStatus());
-            dto.setStatusColor(status.getColorCode());
-            dto.setStatusName(status.getStatusName());
+            if (status != null) {
+                dto.setStatusName(status.getStatusName());
+                dto.setStatusColor(status.getColorCode());
+            }
 
-            dto.setOfflineRegistrationFee(course.getOfflineRegistrationFee());
-            dto.setOnlineRegistrationFee(course.getOnlineRegistrationFee());
-            if (organizer != null) {
-                dto.setOrganizer(organizer.getOrganizer());
-                dto.setOrganizerContactName(organizer.getContactName());
-                dto.setOrganizerPhoneNo(organizer.getPhoneNo());
-                dto.setOrganizerFaxNo(organizer.getFaxNo());
-                dto.setOrganizerEmail(organizer.getEmail());
+            Course course = courseMap.get(dto.getCourseId());
+            if (course != null) {
+
+                dto.setCourseName(course.getCourseName());
+                dto.setCourseLevel(course.getCourseLevel());
+                dto.setVenue(course.getVenue());
+                dto.setOfflineRegistrationFee(course.getOfflineRegistrationFee());
+                dto.setOnlineRegistrationFee(course.getOnlineRegistrationFee());
+
+                Organizer organizer = organizerMap.get(course.getOrganizerId());
+
+                if (organizer != null) {
+                    dto.setOrganizer(organizer.getOrganizer());
+                    dto.setOrganizerContactName(organizer.getContactName());
+                    dto.setOrganizerPhoneNo(organizer.getPhoneNo());
+                    dto.setOrganizerFaxNo(organizer.getFaxNo());
+                    dto.setOrganizerEmail(organizer.getEmail());
+                }
+
+                CourseType courseType = courseTypeMap.get(course.getCourseTypeId());
+
+                if (courseType != null) {
+                    dto.setCourseType(courseType.getCourseType());
+                }
             }
-            if (employeeDTO != null) {
-                dto.setEmpNo(employeeDTO.getEmpNo());
-                dto.setInitiatingOfficerName(CommonUtil.buildEmployeeName(employeeDTO, false));
-                dto.setEmpDesigName(employeeDTO.getEmpDesigName());
-                dto.setEmpDivCode(employeeDTO.getEmpDivCode());
-                dto.setEmail(employeeDTO.getEmail());
-                dto.setMobileNo(employeeDTO.getMobileNo());
-            }
-            if (courseType != null) {
-                dto.setCourseType(courseType.getCourseType());
-            }
-            if (dto.getJournalId() != null && dto.getJournalId() > 0) {
+
+            if (dto.getJournalId() != null) {
                 Journal journal = journalMap.get(dto.getJournalId());
-                dto.setTitleOfPaper(journal.getTitleOfPaper());
+
+                if (journal != null) {
+                    dto.setTitleOfPaper(journal.getTitleOfPaper());
+                }
             }
         });
+
         return dtoList;
+    }
+
+    private List<Requisition> fetchRequisitions(
+            String roleName,
+            Long empId,
+            List<EmployeeDTO> employeeList) {
+
+        Set<String> adminRoles = Set.of(
+                "ROLE_ADMIN",
+                "ROLE_AD_HRT",
+                "ROLE_SA_HRT",
+                "ROLE_DIRECTOR",
+                "ROLE_CAG_DIV",
+                "ROLE_TCG_DIV",
+                "ROLE_SM_HRT"
+        );
+
+        if (adminRoles.contains(roleName)) {
+            return requisitionRepository.findAllByIsActiveOrderByRequisitionIdDesc(1);
+        }
+
+        if ("ROLE_DH".equalsIgnoreCase(roleName)) {
+
+            Optional<DivisionDTO> division = masterClient.getDivisionMaster(xApiKey)
+                    .stream()
+                    .filter(d -> Objects.equals(d.getDivisionHeadId(), empId))
+                    .findFirst();
+
+            if (division.isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            Long divisionId = division.get().getDivisionId();
+
+            List<Long> empIds = employeeList.stream()
+                    .filter(e -> labCode != null && labCode.equalsIgnoreCase(e.getLabCode()))
+                    .filter(e -> Objects.equals(e.getDivisionId(), divisionId))
+                    .map(EmployeeDTO::getEmpId)
+                    .toList();
+
+            return requisitionRepository
+                    .findAllByInitiatingOfficerInAndIsActiveOrderByRequisitionIdDesc(empIds, 1);
+        }
+
+        if ("ROLE_GH".equalsIgnoreCase(roleName)) {
+
+            Optional<DivisionGroupDTO> group = masterClient
+                    .getDivisionGroupMasterList(xApiKey)
+                    .stream()
+                    .filter(g -> Objects.equals(g.getGroupHeadId(), empId))
+                    .findFirst();
+
+            if (group.isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            Set<Long> divisionIds = masterClient.getDivisionMaster(xApiKey)
+                    .stream()
+                    .filter(d -> Objects.equals(d.getGroupId(), group.get().getGroupId()))
+                    .map(DivisionDTO::getDivisionId)
+                    .collect(Collectors.toSet());
+
+            List<Long> empIds = employeeList.stream()
+                    .filter(e -> divisionIds.contains(e.getDivisionId()))
+                    .map(EmployeeDTO::getEmpId)
+                    .toList();
+
+            if (empIds.isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            return requisitionRepository
+                    .findAllByInitiatingOfficerInAndIsActiveOrderByRequisitionIdDesc(empIds, 1);
+        }
+
+        return requisitionRepository
+                .findAllByInitiatingOfficerAndIsActiveOrderByRequisitionIdDesc(empId, 1);
     }
 
     @Transactional
@@ -526,7 +596,7 @@ public class TrainingService {
         Requisition requisition = requisitionRepository.findById(dto.getRequisitionId())
                 .orElseThrow(() -> new NotFoundException("Requisition data not found"));
 
-        if("N".equalsIgnoreCase(requisition.getIsAttend())){
+        if ("N".equalsIgnoreCase(requisition.getIsAttend())) {
             requisition.setIsAttend("Y");
             requisition.setModifiedBy(username);
             requisition.setModifiedDate(LocalDateTime.now());
@@ -553,7 +623,7 @@ public class TrainingService {
     public List<FeedbackDTO> getFeedbackList(Long empId, String roleName, String username) {
         log.info("Feedback list fetched by {}", username);
 
-        List<Feedback> feedbackList = new ArrayList<>();
+        List<Feedback> feedbackList;
         List<EmployeeDTO> employeeList = masterClient.getEmployeeMasterList(xApiKey);
 
         if (Arrays.asList("ROLE_ADMIN", "ROLE_AD_HRT", "ROLE_SA_HRT", "ROLE_DIRECTOR",
@@ -735,87 +805,82 @@ public class TrainingService {
     @CacheEvict(value = "notificationList", allEntries = true)
     @Transactional
     public RequisitionDTO recommendRequisition(@Valid RequisitionDTO dto, String username) {
-        log.info("Request to recommend requisition for id {} ", dto.getRequisitionId());
+
+        log.info("Request to recommend requisition for id {}", dto.getRequisitionId());
 
         if (dto.getRequisitionId() == null) {
-            throw new NotFoundException("Requisition Id can not be null");
+            throw new NotFoundException("Requisition Id cannot be null");
         }
 
         Requisition requisition = requisitionRepository.findById(dto.getRequisitionId())
                 .orElseThrow(() -> new NotFoundException("Requisition not found"));
 
-        if (requisition.getStatus().equalsIgnoreCase("AS") || requisition.getStatus().equalsIgnoreCase("CA")) {
-            if (requisition.getRegistrationFee().longValue() > 0 && !requisition.getStatus().equalsIgnoreCase("CA")) {
+        CashLimit cashLimit = cashLimitRepository
+                .findTopByIsActiveOrderByCashLimitIdDesc(1)
+                .orElseThrow(() -> new NotFoundException("Cash limit is not configured."));
+
+        BigDecimal registrationFee = Optional.ofNullable(requisition.getRegistrationFee())
+                .orElse(BigDecimal.ZERO);
+
+        BigDecimal limit = Optional.ofNullable(cashLimit)
+                .map(CashLimit::getCashLimit)
+                .orElse(BigDecimal.ZERO);
+
+        String status = requisition.getStatus();
+
+        if ("AS".equalsIgnoreCase(status)) {
+
+            if (registrationFee.compareTo(limit) >= 0) {
                 requisition.setStatus("CA");
-                List<SignRoleAuthorityDTO> authorityDTOList = signRoleAuthorityRepository.findBySignAuthRole("AD-HRT");
-                if (authorityDTOList.isEmpty()) {
-                    throw new NotFoundException("In SignRoleAuthority AD-HRT role not found");
-                }
-
-                Map<Long, EmployeeDTO> employeeMap = masterCacheService.getLongEmployeeDTOMap();
-                EmployeeDTO employeeDTO = employeeMap.get(dto.getActionBy());
-
-                String message = getNotificationMsg(requisition.getRequisitionNumber(), employeeDTO, "Forward by");
-                for (SignRoleAuthorityDTO authorityDTO : authorityDTOList) {
-                    insertTransaction(dto.getRequisitionId(), dto.getActionBy(), authorityDTO.getEmpId(), username, "CA", null);
-                    insertNotification(dto.getActionBy(), authorityDTO.getEmpId(), "req-approval", message, username);
-                }
+                forwardToRole(requisition, dto.getActionBy(), username, "AD-HRT", "CA");
             } else {
                 requisition.setStatus("AV");
                 insertTransaction(dto.getRequisitionId(), dto.getActionBy(), dto.getActionBy(), username, "AV", null);
             }
-        } else if (requisition.getStatus().equalsIgnoreCase("AF")) {
+
+        } else if ("CA".equalsIgnoreCase(status)) {
+
+            requisition.setStatus("AV");
+            insertTransaction(dto.getRequisitionId(), dto.getActionBy(), dto.getActionBy(), username, "AV", null);
+
+        } else if ("AF".equalsIgnoreCase(status)) {
+
             requisition.setStatus("AR");
+            forwardToRole(requisition, dto.getActionBy(), username, "SA-HRT", "AR");
 
-            List<SignRoleAuthorityDTO> authorityDTOList = signRoleAuthorityRepository.findBySignAuthRole("SA-HRT");
-            if (authorityDTOList.isEmpty()) {
-                throw new NotFoundException("In SignRoleAuthority SA-HRT role not found");
-            }
+        } else if ("AR".equalsIgnoreCase(status) || "SF".equalsIgnoreCase(status)) {
 
-            Map<Long, EmployeeDTO> employeeMap = masterCacheService.getLongEmployeeDTOMap();
-            EmployeeDTO employeeDTO = employeeMap.get(dto.getActionBy());
-
-            String message = getNotificationMsg(requisition.getRequisitionNumber(), employeeDTO, "Forward by");
-            for (SignRoleAuthorityDTO authorityDTO : authorityDTOList) {
-                insertTransaction(dto.getRequisitionId(), dto.getActionBy(), authorityDTO.getEmpId(), username, "AR", null);
-                insertNotification(dto.getActionBy(), authorityDTO.getEmpId(), "req-approval", message, username);
-            }
-        } else if (requisition.getStatus().equalsIgnoreCase("AR") || requisition.getStatus().equalsIgnoreCase("SF")) {
             requisition.setStatus("AS");
 
-            CashLimit cashLimit = cashLimitRepository.findTopByOrderByCashLimitIdDesc();
+            String role = registrationFee.compareTo(limit) >= 0 ? "CAG-Div" : "AD-HRT";
 
-            List<SignRoleAuthorityDTO> authorityDTOList;
-            String notFoundMsg;
-
-            if (requisition.getRegistrationFee().compareTo(BigDecimal.ZERO) > 0
-                    && requisition.getRegistrationFee().compareTo(cashLimit.getCashLimit()) >= 0) {
-
-                authorityDTOList = signRoleAuthorityRepository.findBySignAuthRole("CAG-Div");
-                notFoundMsg = "In SignRoleAuthority CAG role not found";
-            } else {
-                authorityDTOList = signRoleAuthorityRepository.findBySignAuthRole("AD-HRT");
-                notFoundMsg = "In SignRoleAuthority AD-HRT role not found";
-            }
-
-            if (authorityDTOList.isEmpty()) {
-                throw new NotFoundException(notFoundMsg);
-            }
-
-            Map<Long, EmployeeDTO> employeeMap = masterCacheService.getLongEmployeeDTOMap();
-
-            EmployeeDTO employeeDTO = employeeMap.get(dto.getActionBy());
-
-            String message = getNotificationMsg(requisition.getRequisitionNumber(), employeeDTO, "Forward by");
-            for (SignRoleAuthorityDTO authorityDTO : authorityDTOList) {
-                insertTransaction(dto.getRequisitionId(), dto.getActionBy(), authorityDTO.getEmpId(), username, "AS", null);
-                insertNotification(dto.getActionBy(), authorityDTO.getEmpId(), "req-approval", message, username);
-            }
+            forwardToRole(requisition, dto.getActionBy(), username, role, "AS");
         }
+
         requisition.setModifiedBy(username);
         requisition.setModifiedDate(LocalDateTime.now());
-        return requisitionMapper.toDto(requisition);
+
+        return requisitionMapper.toDto(requisitionRepository.save(requisition));
     }
+
+    private void forwardToRole(Requisition requisition, Long actionBy, String username, String role, String transactionStatus) {
+
+        List<SignRoleAuthorityDTO> authorities = signRoleAuthorityRepository.findBySignAuthRole(role);
+
+        if (authorities.isEmpty()) {
+            throw new NotFoundException("SignRoleAuthority " + role + " role not found");
+        }
+
+        EmployeeDTO employee = masterCacheService.getLongEmployeeDTOMap().get(actionBy);
+
+        String message = getNotificationMsg(requisition.getRequisitionNumber(), employee, "Forward by");
+
+        for (SignRoleAuthorityDTO authority : authorities) {
+            insertTransaction(requisition.getRequisitionId(), actionBy, authority.getEmpId(), username, transactionStatus, null);
+            insertNotification(actionBy, authority.getEmpId(), "req-approval", message, username);
+        }
+    }
+
 
     private static String getNotificationMsg(String requisitionNumber, EmployeeDTO employeeDTO, String messageName) {
         String prefix = employeeDTO.getTitle() != null && !employeeDTO.getTitle().trim().isEmpty()
@@ -1156,10 +1221,7 @@ public class TrainingService {
 
         EvaluationRequestDTO requestDTO = new EvaluationRequestDTO();
         requestDTO.setInitiator(id);
-        requestDTO.setTitle(employeeDTO.getTitle() != null ? employeeDTO.getTitle() :
-                (employeeDTO.getSalutation() != null ? employeeDTO.getSalutation() : ""));
-        requestDTO.setDesignation(employeeDTO.getEmpDesigName() != null ? employeeDTO.getEmpDesigName() : "");
-        requestDTO.setEmpName(employeeDTO.getEmpName() != null ? employeeDTO.getEmpName() : "");
+        requestDTO.setEmpName(employeeDTO!= null ? CommonUtil.buildEmployeeName(employeeDTO,true) : "");
         requestDTO.setEvaluation(evaluation);
 
         return requestDTO;
@@ -1532,7 +1594,7 @@ public class TrainingService {
         log.info("Requisitions forward to director for ids {} by {} ", dto, username);
 
         if (dto == null || dto.getRequisitionIds() == null || dto.getRequisitionIds().isEmpty()) {
-            throw new RuntimeException("Requisition Id list cannot be empty");
+            throw new NotFoundException("Requisition Id list cannot be empty");
         }
 
         List<Requisition> requisitions = requisitionRepository.findAllById(dto.getRequisitionIds());
@@ -1547,13 +1609,21 @@ public class TrainingService {
             throw new NotFoundException("ROLE_DIRECTOR not found");
         }
 
+        Map<Long, EmployeeDTO> employeeMap = masterCacheService.getLongEmployeeDTOMap();
+
         for (Requisition req : requisitions) {
+
+            EmployeeDTO employeeDTO = employeeMap.get(dto.getActionBy());
+            String message = getNotificationMsg(req.getRequisitionNumber(), employeeDTO, "Forward by");
+
             if (req.getStatus().equalsIgnoreCase("DA")) {
                 req.setStatus("FC");
                 insertTransaction(req.getRequisitionId(), dto.getActionBy(), login.getEmpId(), username, "FC", null);
+                insertNotification(dto.getActionBy(), login.getEmpId(), "req-approved-list", message, username);
             } else {
                 req.setStatus("AD");
                 insertTransaction(req.getRequisitionId(), dto.getActionBy(), login.getEmpId(), username, "AD", null);
+                insertNotification(dto.getActionBy(), login.getEmpId(), "req-approved-list", message, username);
             }
             req.setModifiedBy(username);
             req.setModifiedDate(LocalDateTime.now());
@@ -1568,7 +1638,7 @@ public class TrainingService {
         log.info("Requisitions approved by director for ids {} by {} ", dto, username);
 
         if (dto == null || dto.getRequisitionIds() == null || dto.getRequisitionIds().isEmpty()) {
-            throw new RuntimeException("Requisition Id list cannot be empty");
+            throw new NotFoundException("Requisition Id list cannot be empty");
         }
 
         List<Requisition> requisitions = requisitionRepository.findAllById(dto.getRequisitionIds());
@@ -1597,7 +1667,7 @@ public class TrainingService {
         log.info("Requisitions recommend to DFA by director for ids {} by {} ", dto, username);
 
         if (dto == null || dto.getRequisitionIds() == null || dto.getRequisitionIds().isEmpty()) {
-            throw new RuntimeException("Requisition Id list cannot be empty");
+            throw new NotFoundException("Requisition Id list cannot be empty");
         }
 
         List<Requisition> requisitions = requisitionRepository.findAllById(dto.getRequisitionIds());
@@ -1991,7 +2061,7 @@ public class TrainingService {
     public List<JournalDTO> getJournalList(Long empId, String roleName, String username) {
         log.info("Request to fetch journal list by {}", username);
 
-        List<Journal> journals = new ArrayList<>();
+        List<Journal> journals;
 
         if ("ROLE_USER".equalsIgnoreCase(roleName)) {
             journals = journalRepository.findAllByEmpIdAndIsActiveOrderByJournalIdDesc(empId, 1);
@@ -2208,7 +2278,7 @@ public class TrainingService {
         log.info("Request to add confirmation for reqId {} by {} ", dto.getRequisitionId(), username);
 
         Requisition requisition = requisitionRepository.findById(dto.getRequisitionId())
-                .orElseThrow(()-> new NotFoundException("Requisition data not found"));
+                .orElseThrow(() -> new NotFoundException("Requisition data not found"));
 
         requisition.setIsConfirmed(dto.getIsConfirmed());
         requisition.setConfirmRemarks(dto.getConfirmRemarks());
@@ -2228,7 +2298,7 @@ public class TrainingService {
         log.info("Request to add attendance for reqId {} by {} ", dto.getRequisitionId(), username);
 
         Requisition requisition = requisitionRepository.findById(dto.getRequisitionId())
-                .orElseThrow(()-> new NotFoundException("Requisition data not found"));
+                .orElseThrow(() -> new NotFoundException("Requisition data not found"));
 
         requisition.setIsAttend(dto.getIsAttend());
         requisition.setAttendRemarks(dto.getAttendRemarks());
@@ -2237,5 +2307,11 @@ public class TrainingService {
 
         requisition = requisitionRepository.save(requisition);
         return requisitionMapper.toDto(requisition);
+    }
+
+    public LabMasterDTO getLabMasterData(String username) {
+        log.info("Request to fetch lab master data by {} ", username);
+        return masterCacheService.getLabMasterData()
+                .orElseThrow(() -> new NotFoundException("Lab Master data not found."));
     }
 }

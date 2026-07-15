@@ -10,6 +10,7 @@ import java.io.Serializable;
 public class DivisionDTO implements Serializable {
 
     private Long divisionId;
+    private Long groupId;
 
     @NotBlank(message = "Division code is required")
     private String divisionCode;

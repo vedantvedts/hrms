@@ -51,4 +51,11 @@ public interface MasterClientService {
 
     @PutMapping( value = "/change-password" )
     Integer changePassword(@RequestHeader("Authorization") String token, @RequestHeader("username") String username, @RequestBody ChangePasswordDTO changePasswordDTO);
+
+    @GetMapping("/getDivisionGroupList")
+    List<DivisionGroupDTO> getDivisionGroupMasterList(@RequestHeader("X-API-KEY") String apiKey);
+
+    @GetMapping("/getLabMaster")
+    List<LabMasterDTO> getLabMaster(@RequestHeader("X-API-KEY") String apiKey);
+
 }

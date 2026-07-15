@@ -726,7 +726,7 @@ public class AdminService {
     public List<HandingOverDTO> getHandingOverList(String username, LocalDate fromDate, LocalDate toDate) {
         log.info("Request to getHandingOverList list by username {}", username);
         List<HandingOverDTO> list = handingOverRepository
-                .findAllByFromDateBetween(fromDate, toDate)
+                .findAllByFromDateBetweenOrderByHandingOverIdDesc(fromDate, toDate)
                 .stream()
                 .map(handingOverMapper::toDto)
                 .toList();
@@ -807,7 +807,9 @@ public class AdminService {
                 cashLimit.getCashLimit().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BadRequestException("Cash Limit must be greater than zero");
         }
-        CashLimit previousRecord = cashLimitRepository.findTopByOrderByCashLimitIdDesc();
+        CashLimit previousRecord = cashLimitRepository
+                .findTopByIsActiveOrderByCashLimitIdDesc(1)
+                .orElseThrow(() -> new NotFoundException("Cash limit is not configured."));
 
         if (previousRecord == null) {
             // First record

@@ -89,6 +89,27 @@ public class MasterController {
                     .filter(emp -> divisionIds.contains(emp.getDivisionId()))
                     .sorted(Comparator.comparingLong(e -> e.getSrNo() == 0 ? Long.MAX_VALUE : e.getSrNo()))
                     .toList();
+        } else if ("ROLE_GH".equalsIgnoreCase(roleName)) {
+
+            List<DivisionGroupDTO> groupDTOList = masterClient.getDivisionGroupMasterList(xApiKey);
+
+            Optional<DivisionGroupDTO> groupOpt = groupDTOList.stream()
+                    .filter(group -> Objects.equals(group.getGroupHeadId(), empId))
+                    .findFirst();
+
+            Long groupId = groupOpt.get().getGroupId();
+
+            List<DivisionDTO> divisionDTOS = masterService.getDivisionMaster();
+
+            Set<Long> divisionIds = divisionDTOS.stream()
+                    .filter(e->e.getGroupId().equals(groupId))
+                    .map(DivisionDTO::getDivisionId).collect(Collectors.toSet());
+
+            // DH → Filter only their division employee
+            list = employeeList.stream()
+                    .filter(emp -> divisionIds.contains(emp.getDivisionId()))
+                    .sorted(Comparator.comparingLong(e -> e.getSrNo() == 0 ? Long.MAX_VALUE : e.getSrNo()))
+                    .toList();
         } else {
 
             // Optional: default case

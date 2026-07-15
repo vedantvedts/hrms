@@ -11,7 +11,8 @@ import java.util.List;
 
 @Repository
 public interface HandingOverRepository extends JpaRepository<HandingOver, Long> {
-    List<HandingOver> findAllByFromDateBetween(LocalDate fromDate, LocalDate toDate);
+
+    List<HandingOver> findAllByFromDateBetweenOrderByHandingOverIdDesc(LocalDate fromDate, LocalDate toDate);
 
     @Query("""
                 SELECT COUNT(h) > 0
@@ -24,7 +25,7 @@ public interface HandingOverRepository extends JpaRepository<HandingOver, Long> 
             """)
     boolean existsOverlappingDateRange(
             @Param("handingOverId") Long handingOverId, @Param("fromEmpId") Long fromEmpId,
-            @Param("fromDate") LocalDate fromDate,@Param("toDate") LocalDate toDate);
+            @Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate);
 
     List<HandingOver> findByToEmpIdAndToDateGreaterThanEqualAndIsActive(Long toEmpId, LocalDate date, int isActive);
 }

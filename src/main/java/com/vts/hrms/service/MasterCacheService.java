@@ -1,9 +1,6 @@
 package com.vts.hrms.service;
 
-import com.vts.hrms.dto.DivisionDTO;
-import com.vts.hrms.dto.EmployeeDTO;
-import com.vts.hrms.dto.ProjectEmployeeDto;
-import com.vts.hrms.dto.ProjectMasterDTO;
+import com.vts.hrms.dto.*;
 import com.vts.hrms.entity.Course;
 import com.vts.hrms.entity.CourseType;
 import com.vts.hrms.entity.Organizer;
@@ -18,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -102,6 +100,13 @@ public class MasterCacheService {
         return list.stream()
                 .filter(p -> p.getEmpId() != null)
                 .collect(Collectors.groupingBy(ProjectEmployeeDto::getEmpId));
+    }
+
+    @Cacheable(value = "labMasterCache", key = "'labMaster'")
+    public Optional<LabMasterDTO> getLabMasterData() {
+        return masterClient.getLabMaster(xApiKey).stream()
+                .filter(e -> e.getLabCode().equalsIgnoreCase(labCode))
+                .findFirst();
     }
 
 }

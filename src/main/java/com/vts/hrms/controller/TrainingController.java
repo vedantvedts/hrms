@@ -450,7 +450,7 @@ public class TrainingController {
     }
 
     @PostMapping(value = "/forward-director")
-    public ResponseEntity<ApiResponse> reqForwardToDirector(@RequestBody DirectorApproveDTO dto, @RequestHeader String username) throws IOException {
+    public ResponseEntity<ApiResponse> reqForwardToDirector(@RequestBody DirectorApproveDTO dto, @RequestHeader String username) {
         DirectorApproveDTO data = trainingService.reqForwardToDirector(dto, username);
         return ResponseEntity.ok(
                 new ApiResponse(true, "Requisition forward to director successfully", data)
@@ -458,7 +458,7 @@ public class TrainingController {
     }
 
     @PostMapping(value = "/approve-req")
-    public ResponseEntity<ApiResponse> approveRequisition(@RequestBody DirectorApproveDTO dto, @RequestHeader String username) throws IOException {
+    public ResponseEntity<ApiResponse> approveRequisition(@RequestBody DirectorApproveDTO dto, @RequestHeader String username) {
         DirectorApproveDTO data = trainingService.approveRequisition(dto, username);
         return ResponseEntity.ok(
                 new ApiResponse(true, "Requisition approved successfully", data)
@@ -466,7 +466,7 @@ public class TrainingController {
     }
 
     @PostMapping(value = "/recommend-dfa")
-    public ResponseEntity<ApiResponse> recommendReqToDFA(@RequestBody DirectorApproveDTO dto, @RequestHeader String username) throws IOException {
+    public ResponseEntity<ApiResponse> recommendReqToDFA(@RequestBody DirectorApproveDTO dto, @RequestHeader String username) {
         DirectorApproveDTO data = trainingService.recommendReqToDFA(dto, username);
         return ResponseEntity.ok(
                 new ApiResponse(true, "Requisition recommend to DFA successfully", data)
@@ -552,15 +552,15 @@ public class TrainingController {
     }
 
     @GetMapping(value = "/distributionById/{id}")
-    public ResponseEntity<ApiResponse> GetDistributionByID(@PathVariable Long distributionId, @RequestHeader String username) {
-        DistributionDTO list = trainingService.getDistributionByID(distributionId, username);
+    public ResponseEntity<ApiResponse> getDistributionByID(@PathVariable Long id, @RequestHeader String username) {
+        DistributionDTO list = trainingService.getDistributionByID(id, username);
         return ResponseEntity.ok(
                 new ApiResponse(true, "Distribution data fetched successfully", list)
         );
     }
 
     @PostMapping(value = "/add-distributions")
-    public ResponseEntity<ApiResponse> ADDDistributionDATA(
+    public ResponseEntity<ApiResponse> addDistributionDATA(
             @Valid @RequestBody DistributionDTO dto,
             @RequestHeader String username) {
         DistributionDTO data = trainingService.addDistributionData(dto, username);
@@ -571,7 +571,7 @@ public class TrainingController {
     }
 
     @PutMapping(value = "/edit-distribution")
-    public ResponseEntity<ApiResponse> editDistributionDatas(@Valid @RequestBody DistributionDTO dto, @RequestHeader String Username) {
+    public ResponseEntity<ApiResponse> editDistributionData(@Valid @RequestBody DistributionDTO dto, @RequestHeader String Username) {
         Optional<DistributionDTO> data = trainingService.editDistributionData(dto, Username);
         return ResponseEntity.ok(
                 new ApiResponse(true, "Distribution Updated successfully", data)
@@ -660,6 +660,15 @@ public class TrainingController {
 
         return ResponseEntity.ok(
                 new ApiResponse(true, "Attendance details added successfully", data)
+        );
+    }
+
+    @GetMapping(value = "/lab-master")
+    public ResponseEntity<ApiResponse> getLabMasterData(@RequestHeader String username) {
+        LabMasterDTO data = trainingService.getLabMasterData(username);
+
+        return ResponseEntity.ok(
+                new ApiResponse(true, "Lab details fetched successfully", data)
         );
     }
 
