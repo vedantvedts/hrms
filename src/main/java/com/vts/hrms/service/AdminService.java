@@ -289,6 +289,7 @@ public class AdminService {
                 FormModuleDto formModuleDto = FormModuleDto.builder()
                         .FormModuleId(detail.getFormModuleId())
                         .FormModuleName(detail.getFormModuleName())
+                        .hindiFormModuleName(detail.getHindiFormModuleName())
                         .ModuleUrl(detail.getModuleUrl())
                         .ModuleIcon(detail.getModuleIcon())
                         .SerialNo(detail.getSerialNo())
@@ -319,6 +320,7 @@ public class AdminService {
                     FormModuleDto dto = new FormModuleDto();
                     dto.setFormModuleId(Long.parseLong(O[0].toString()));
                     dto.setFormModuleName(O[1].toString());
+                    dto.setHindiFormModuleName(O[2].toString());
                     FMlist.add(dto);
                 }
             } else {
@@ -347,6 +349,7 @@ public class AdminService {
                         .FormName(detail.getFormName())
                         .FormUrl(detail.getFormUrl())
                         .FormDispName(detail.getFormDispName())
+                        .hindiFormDispName(detail.getHindiFormDispName())
                         .FormSerialNo(detail.getFormSerialNo())
                         .FormColor(detail.getFormColor())
                         .ModifiedBy(detail.getModifiedBy())
