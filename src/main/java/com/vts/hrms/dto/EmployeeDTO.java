@@ -57,4 +57,6 @@ public class EmployeeDTO implements Serializable {
     private EmployeeDetailsDTO employeeDetails;
     private LabDetailsDTO labDetails;
 
+    private String isGroup;
+
 }

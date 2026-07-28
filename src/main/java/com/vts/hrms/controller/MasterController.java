@@ -22,9 +22,12 @@ public class MasterController {
     @Value("${x_api_key}")
     private String xApiKey;
 
-    public MasterController(MasterService masterService,MasterClientService masterClient) {
+    @Value("${labCode}")
+    private String labCode;
+
+    public MasterController(MasterService masterService, MasterClientService masterClient) {
         this.masterService = masterService;
-        this.masterClient=masterClient;
+        this.masterClient = masterClient;
     }
 
     @GetMapping(value = "/designation")
@@ -81,7 +84,7 @@ public class MasterController {
             List<DivisionDTO> divisionDTOS = masterService.getDivisionMaster();
 
             Set<Long> divisionIds = divisionDTOS.stream()
-                    .filter(e->e.getDivisionHeadId().equals(empId))
+                    .filter(e -> e.getDivisionHeadId().equals(empId))
                     .map(DivisionDTO::getDivisionId).collect(Collectors.toSet());
 
             // DH → Filter only their division employee
@@ -90,26 +93,39 @@ public class MasterController {
                     .sorted(Comparator.comparingLong(e -> e.getSrNo() == 0 ? Long.MAX_VALUE : e.getSrNo()))
                     .toList();
         } else if ("ROLE_GH".equalsIgnoreCase(roleName)) {
+            if ("CAIR".equalsIgnoreCase(labCode)) {
+                List<DivisionDTO> divisionDTOS = masterService.getDivisionMaster();
 
-            List<DivisionGroupDTO> groupDTOList = masterClient.getDivisionGroupMasterList(xApiKey);
+                Set<Long> divisionIds = divisionDTOS.stream()
+                        .filter(e -> e.getDivisionHeadId().equals(empId))
+                        .map(DivisionDTO::getDivisionId).collect(Collectors.toSet());
 
-            Optional<DivisionGroupDTO> groupOpt = groupDTOList.stream()
-                    .filter(group -> Objects.equals(group.getGroupHeadId(), empId))
-                    .findFirst();
+                // DH → Filter only their division employee
+                list = employeeList.stream()
+                        .filter(emp -> divisionIds.contains(emp.getDivisionId()))
+                        .sorted(Comparator.comparingLong(e -> e.getSrNo() == 0 ? Long.MAX_VALUE : e.getSrNo()))
+                        .toList();
+            } else {
+                List<DivisionGroupDTO> groupDTOList = masterClient.getDivisionGroupMasterList(xApiKey);
 
-            Long groupId = groupOpt.get().getGroupId();
+                Optional<DivisionGroupDTO> groupOpt = groupDTOList.stream()
+                        .filter(group -> Objects.equals(group.getGroupHeadId(), empId))
+                        .findFirst();
 
-            List<DivisionDTO> divisionDTOS = masterService.getDivisionMaster();
+                Long groupId = groupOpt.get().getGroupId();
 
-            Set<Long> divisionIds = divisionDTOS.stream()
-                    .filter(e->e.getGroupId().equals(groupId))
-                    .map(DivisionDTO::getDivisionId).collect(Collectors.toSet());
+                List<DivisionDTO> divisionDTOS = masterService.getDivisionMaster();
 
-            // DH → Filter only their division employee
-            list = employeeList.stream()
-                    .filter(emp -> divisionIds.contains(emp.getDivisionId()))
-                    .sorted(Comparator.comparingLong(e -> e.getSrNo() == 0 ? Long.MAX_VALUE : e.getSrNo()))
-                    .toList();
+                Set<Long> divisionIds = divisionDTOS.stream()
+                        .filter(e -> e.getGroupId().equals(groupId))
+                        .map(DivisionDTO::getDivisionId).collect(Collectors.toSet());
+
+                // DH → Filter only their division employee
+                list = employeeList.stream()
+                        .filter(emp -> divisionIds.contains(emp.getDivisionId()))
+                        .sorted(Comparator.comparingLong(e -> e.getSrNo() == 0 ? Long.MAX_VALUE : e.getSrNo()))
+                        .toList();
+            }
         } else {
 
             // Optional: default case
@@ -176,18 +192,18 @@ public class MasterController {
         );
 
     }
+
     @GetMapping(value = "/project-role-master")
-    public ResponseEntity<ApiResponse> getProjectRoleMasterList(@RequestHeader String username,@RequestHeader(value = "Authorization") String token) {
-        List<RoleMaster> list = masterService.getRoleMasterListed(username,token);
+    public ResponseEntity<ApiResponse> getProjectRoleMasterList(@RequestHeader String username, @RequestHeader(value = "Authorization") String token) {
+        List<RoleMaster> list = masterService.getRoleMasterListed(username, token);
         return ResponseEntity.ok(
                 new ApiResponse(true, "Role master list fetched", list)
         );
     }
 
     @PostMapping(value = "/add-project-role")
-    public ResponseEntity<ApiResponse> addProjectRoleIds (@RequestHeader String username,@RequestBody ProjectAssignEmpDto dto,
-                                                          @RequestHeader(value = "Authorization") String token)
-    {
+    public ResponseEntity<ApiResponse> addProjectRoleIds(@RequestHeader String username, @RequestBody ProjectAssignEmpDto dto,
+                                                         @RequestHeader(value = "Authorization") String token) {
         ResponseEntity<String> response = masterService.addProjectsRolesIds(username, dto, token);
 
         if (response.getStatusCode().is2xxSuccessful() && "200".equals(response.getBody())) {
@@ -201,10 +217,10 @@ public class MasterController {
     }
 
     @GetMapping("/user-login-app-access")
-    public ResponseEntity<Boolean> checkUserLoginAccess(@RequestHeader(value = "username", required = false) String username,@RequestHeader(value = "Authorization", required = false) String token, @RequestParam ProjectCode projectCode) {
+    public ResponseEntity<Boolean> checkUserLoginAccess(@RequestHeader(value = "username", required = false) String username, @RequestHeader(value = "Authorization", required = false) String token, @RequestParam ProjectCode projectCode) {
 
         try {
-            return masterClient.checkUserLoginAccess(token,username,projectCode);
+            return masterClient.checkUserLoginAccess(token, username, projectCode);
         } catch (Exception e) {
             //
             e.printStackTrace();
