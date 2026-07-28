@@ -90,6 +90,7 @@ public class RequisitionDTO implements Serializable {
     private String mobileNo;
 
     private String remarks;
+    private String isGroup;
 
     private Long journalId;
     private String titleOfPaper;

@@ -92,6 +92,7 @@ public class MasterService {
         dto.setDivisionId(employee.getDivisionId());
         dto.setLoginId(dto.getLoginId());
         dto.setRoleId(dto.getRoleId());
+        dto.setIsGroup(employee.getIsGroup());
 
         return dto;
     }

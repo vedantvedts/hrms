@@ -24,5 +24,6 @@ public class DivisionDTO implements Serializable {
     private Long divisionHeadId;
 
     private String divHeadName;
+    private String isGroup;
 
 }

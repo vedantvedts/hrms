@@ -20,6 +20,7 @@ public class LoginEmployeeDto {
     private Long divisionId;
     private Long loginId;
     private Long roleId;
+    private String isGroup;
 
     public LoginEmployeeDto(Long empId, String roleName, Long loginId, Long roleId) {
         this.empId = empId;

@@ -51,4 +51,6 @@ public class FeedbackDTO {
     private LocalDateTime acceptedDate;
     private String requestThrough;
 
+    private String isGroup;
+
 }
