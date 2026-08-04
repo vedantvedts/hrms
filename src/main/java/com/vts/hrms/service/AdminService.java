@@ -152,6 +152,17 @@ public class AdminService {
                 .map(RoleSecurity::getRoleName)
                 .collect(Collectors.toList());
 
+        Map<String, String> roleHindiMap = roleRepository.findAll()
+                .stream()
+                .collect(Collectors.toMap(
+                        Role::getRoleName,
+                        Role::getHindiRoleName
+                ));
+
+        List<String> hindiRoleNames = roleNames.stream()
+                .map(roleHindiMap::get)
+                .toList();
+
         return new UserResponseDTO(
                 login.getLoginId(),
                 login.getEmpId(),
@@ -161,7 +172,8 @@ public class AdminService {
                 employee != null ? employee.getEmpDesigName() : null,
                 employee != null ? employee.getEmpDivCode() : null,
                 roleIds,
-                roleNames
+                roleNames,
+                hindiRoleNames
         );
 
     }
@@ -211,7 +223,8 @@ public class AdminService {
                     dto.getDesignationName(),
                     dto.getDivisionName(),
                     roleList.stream().map(RoleSecurity::getRoleId).collect(Collectors.toList()),
-                    roleList.stream().map(RoleSecurity::getRoleName).collect(Collectors.toList())
+                    roleList.stream().map(RoleSecurity::getRoleName).collect(Collectors.toList()),
+                    null
             );
 
         } catch (RuntimeException e) {
@@ -266,7 +279,9 @@ public class AdminService {
                     dto.getDesignationName(),
                     dto.getDivisionName(),
                     roleList.stream().map(RoleSecurity::getRoleId).collect(Collectors.toList()),
-                    roleList.stream().map(RoleSecurity::getRoleName).collect(Collectors.toList())
+                    roleList.stream().map(RoleSecurity::getRoleName).collect(Collectors.toList()),
+                    null
+
             );
 
         } catch (RuntimeException e) {
