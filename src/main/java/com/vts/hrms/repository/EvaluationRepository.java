@@ -26,7 +26,7 @@ public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
                 )
                 FROM Evaluation e
                 LEFT JOIN Requisition r ON r.requisitionId = e.requisitionId
-                AND r.status IN ("CO", "FA") AND r.isAttend = "Y"
+                AND r.status IN ("CO", "FA", "PA") AND r.isAttend = "Y"
                 LEFT JOIN Course p ON p.courseId = r.courseId
                 WHERE e.isActive = 1
                 AND r.fromDate >= :fromDate AND r.toDate <= :toDate

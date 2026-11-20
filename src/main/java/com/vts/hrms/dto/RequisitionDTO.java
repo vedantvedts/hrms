@@ -52,6 +52,7 @@ public class RequisitionDTO implements Serializable {
     private String necessity;
     private BigDecimal offlineRegistrationFee;
     private BigDecimal onlineRegistrationFee;
+    private String courseBrochureName;
 
     private String reason;
     private String status;

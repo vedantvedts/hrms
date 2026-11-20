@@ -277,30 +277,21 @@ public class AdminController {
 
 
     @PostMapping(value = "custom-audit-stamping-login")
-    public String logIn(@RequestBody String username,
-                        Authentication authentication,
-                        HttpServletRequest request) {
+    public String logIn(@RequestBody String username, HttpServletRequest request) {
 
-        LOG.info("========== LOGIN AUDIT STAMPING STARTED ==========");
+        LOG.info("Login audit stamping started");
 
         long result = 0;
 
         try {
             username = username.replace("\"", "").trim();
 
-            LOG.info("Login username: {}", username);
-
             String ipAddress = getClientIpAddress(request);
-
-            LOG.info("Client IP Address: {}", ipAddress);
-            LOG.info("Remote Address: {}", request.getRemoteAddr());
-            LOG.info("X-Forwarded-For: {}", request.getHeader("X-Forwarded-For"));
-            LOG.info("X-Real-IP: {}", request.getHeader("X-Real-IP"));
 
             Login login = loginRepository.findByUsernameAndIsActive(username, 1);
 
             if (login == null) {
-                LOG.warn("No active login found for username: {}", username);
+                LOG.warn("Login audit stamping skipped: No active login found for username: {}", username);
                 return "0";
             }
 
@@ -312,39 +303,27 @@ public class AdminController {
             stamping.setUsername(login.getUsername());
             stamping.setIpAddress(ipAddress);
 
-            LOG.info("Saving login audit stamping for user: {}", username);
-
             result = adminService.loginStampingInsert(stamping);
 
-            LOG.info("Login audit stamping saved successfully. Result: {}", result);
+            LOG.info("Login audit stamping completed successfully for username: {}", username);
 
         } catch (Exception e) {
-            LOG.error("Error in custom-audit-stamping-login for user: {}",
-                    username, e);
+            LOG.error("Error occurred while saving login audit stamping for username: {}", username, e);
         }
-
-        LOG.info("========== LOGIN AUDIT STAMPING COMPLETED ==========");
 
         return String.valueOf(result);
     }
 
-
     private String getClientIpAddress(HttpServletRequest request) {
-
         String ipAddress = request.getHeader("X-Forwarded-For");
-
         if (ipAddress != null && !ipAddress.isBlank()) {
-            // First IP in the forwarded list is generally the original client
-            ipAddress = ipAddress.split(",")[0].trim();
-            return ipAddress;
+            return ipAddress.split(",")[0].trim();
         }
 
         ipAddress = request.getHeader("X-Real-IP");
-
         if (ipAddress != null && !ipAddress.isBlank()) {
             return ipAddress.trim();
         }
-
         return request.getRemoteAddr();
     }
 

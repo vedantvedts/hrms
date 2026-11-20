@@ -22,7 +22,7 @@ public interface AuditStampingRepository extends JpaRepository<AuditStamping, Lo
                 WHERE a.loginDate >= :fromDate
                 AND a.loginDate < :toDate
                 AND a.username = :userName
-                ORDER BY a.loginDate DESC
+                ORDER BY a.loginDatetime DESC
             """)
     List<AuditStampingDTO> auditList(String userName, LocalDate fromDate, LocalDate toDate);
 

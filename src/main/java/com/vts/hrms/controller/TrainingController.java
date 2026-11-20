@@ -197,6 +197,15 @@ public class TrainingController {
         );
     }
 
+    @GetMapping(value = "/all-type-requisition")
+    public ResponseEntity<ApiResponse> getAllTypeRequisitionList(@RequestParam Long empId, @RequestParam String roleName, @RequestParam LocalDate fromDate, @RequestParam LocalDate toDate, @RequestParam(required = false) Long selectedEmployeeId, @RequestHeader String username) {
+        List<RequisitionDTO> list = trainingService.getRequisitionList(empId, roleName, fromDate, toDate, selectedEmployeeId, username, "B");
+
+        return ResponseEntity.ok(
+                new ApiResponse(true, "All type requisition list fetched", list)
+        );
+    }
+
     @GetMapping(value = "/requisition/{id}")
     public ResponseEntity<ApiResponse> getRequisitionById(@PathVariable Long id, @RequestHeader String username) {
         RequisitionDTO data = trainingService.getRequisitionById(id, username);
@@ -632,8 +641,10 @@ public class TrainingController {
     }
 
     @GetMapping(value = "/mandatory-training")
-    public ResponseEntity<ApiResponse> getMandatoryTrainingList(@RequestParam Long empId, @RequestParam String roleName, @RequestHeader String username) {
-        List<RequisitionDTO> list = trainingService.getRequisitionList(empId, roleName, null, null, null, username, "Y");
+    public ResponseEntity<ApiResponse> getMandatoryTrainingList(@RequestParam Long empId, @RequestParam String roleName,
+                                                                @RequestParam LocalDate fromDate, @RequestParam LocalDate toDate,
+                                                                @RequestParam(required = false) Long selectedEmployeeId, @RequestHeader String username) {
+        List<RequisitionDTO> list = trainingService.getRequisitionList(empId, roleName, fromDate, toDate, selectedEmployeeId, username, "Y");
 
         return ResponseEntity.ok(
                 new ApiResponse(true, "Requisition of mandatory training list fetched", list)

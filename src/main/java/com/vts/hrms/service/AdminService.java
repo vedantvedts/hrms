@@ -223,6 +223,7 @@ public class AdminService {
             login.setUsername(dto.getUsername());
             login.setEmpId(dto.getEmpId());
             login.setPassword(encoder.encode(password));
+            login.setIsDefaultPassword("Y");
             login.setCreatedBy(username);
             login.setCreatedDate(LocalDateTime.now());
             login.setIsActive(1);

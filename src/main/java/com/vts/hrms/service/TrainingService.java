@@ -385,7 +385,7 @@ public class TrainingService {
                     .toList();
         }
 
-        if (StringUtils.hasText(isMandatory)) {
+        if (StringUtils.hasText(isMandatory) && !"B".equalsIgnoreCase(isMandatory)) {
             requisitions = requisitions.stream()
                     .filter(r -> isMandatory.equalsIgnoreCase(r.getIsMandatory()))
                     .toList();
@@ -426,6 +426,7 @@ public class TrainingService {
                 dto.setVenue(course.getVenue());
                 dto.setOfflineRegistrationFee(course.getOfflineRegistrationFee());
                 dto.setOnlineRegistrationFee(course.getOnlineRegistrationFee());
+                dto.setCourseBrochureName(course.getBrochureName());
 
                 Organizer organizer = organizerMap.get(course.getOrganizerId());
 
